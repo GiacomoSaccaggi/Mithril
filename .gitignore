@@ -1,0 +1,38 @@
+# Build artifacts
+/target/
+
+# GGUF model files (large, downloaded at runtime)
+models/
+*.gguf
+
+# Mithril runtime data
+.celebrimbot/
+
+# MCP server config (may contain local paths)
+mcp.json
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Session data (contains conversation history)
+sessions/
+
+# Secrets (should never be committed)
+secrets
+*.pem
+*.key
+
+# Test artifacts
+*.profraw
+lcov.info
