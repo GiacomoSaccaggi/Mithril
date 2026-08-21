@@ -1,0 +1,26 @@
+# Gemini Only Fellowship — single powerful agent
+# Simple setup for users who only have Gemini configured
+
+name: "gemini-only"
+description: "Single Gemini agent with GGUF for trivial tasks"
+
+controller:
+  provider: local
+  model: qwen-1.5b
+  context_window: 2
+
+max_rounds: 15
+token_budget: 100000
+
+agents:
+  - name: "gemini"
+    provider: gemini
+    model: gemini-3.6-flash
+    role: "All-purpose assistant. Codes, analyzes, explains, reviews."
+    when: "any task"
+    can_call: ["gguf"]
+    tools: ["*"]
+
+token_tracking:
+  enabled: true
+  show_per_agent: true
