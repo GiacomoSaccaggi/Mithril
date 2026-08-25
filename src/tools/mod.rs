@@ -64,5 +64,8 @@ pub fn create_default_registry(base_path: &str) -> ToolRegistry {
     registry.register(LoreWriteTool::new());
     registry.register(LoreReadTool::new());
     registry.register(PatchTool::new(file_op));
+    registry.register(GlobTool::new(base_path));
+    registry.register(TodoWriteTool::new());
+    registry.register(QuestionTool::new());
     registry
 }

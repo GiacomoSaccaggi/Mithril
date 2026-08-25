@@ -1,5 +1,6 @@
 //! Interactive chat CLI — terminal frontend using fellowship orchestration.
 
+use std::collections::HashMap;
 use anyhow::Result;
 use colored::Colorize;
 use rustyline::error::ReadlineError;
@@ -252,6 +253,31 @@ async fn handle_command(
     let parts: Vec<&str> = input.split_whitespace().collect();
     let command = parts.first().copied().unwrap_or("");
 
+    // Custom commands: check .mithril/commands.yaml first
+    if let Ok(custom_cmds) = std::fs::read_to_string(".mithril/commands.yaml") {
+        if let Ok(cmds) = serde_yaml::from_str::<HashMap<String, String>>(&custom_cmds) {
+            let cmd_key = command.trim_start_matches('/');
+            if let Some(expansion) = cmds.get(cmd_key) {
+                println!("  {} Running custom command: {}", "⚡".dimmed(), cmd_key);
+                println!("  {}", expansion.dimmed());
+                // Execute as a terminal command
+                let output = std::process::Command::new("sh")
+                    .args(["-c", expansion])
+                    .output();
+                match output {
+                    Ok(o) => {
+                        let stdout = String::from_utf8_lossy(&o.stdout);
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        if !stdout.is_empty() { println!("{}", stdout); }
+                        if !stderr.is_empty() { eprintln!("{}", stderr); }
+                    }
+                    Err(e) => eprintln!("  {} Command failed: {}", "✗".red(), e),
+                }
+                return CommandResult::Continue;
+            }
+        }
+    }
+
     match command {
         "/exit" | "/quit" | "/q" => {
             println!("{}", "Goodbye!".dimmed());
@@ -354,6 +380,49 @@ async fn handle_command(
                         println!("  {} Compacted to {} messages. Context freed.", "✓".green(), msgs.len());
                     }
                     Err(e) => eprintln!("  {} Compaction failed: {}", "Error:".red(), e),
+                }
+            }
+            CommandResult::Continue
+        }
+
+        "/share" => {
+            let msgs = session.snapshot();
+            if msgs.is_empty() {
+                println!("  {} Nothing to share (empty conversation)", "⚠".yellow());
+            } else {
+                // Export as markdown
+                let mut md = String::from("# Mithril Chat Session
+
+");
+                for m in &msgs {
+                    match m.role.as_str() {
+                        "user" => md.push_str(&format!("## 🧑 User
+
+{}
+
+", m.content)),
+                        "assistant" => md.push_str(&format!("## 🤖 Assistant
+
+{}
+
+", m.content)),
+                        "system" => {} // skip system messages
+                        _ => {}
+                    }
+                }
+                let share_dir = std::path::Path::new("tmp");
+                let _ = std::fs::create_dir_all(share_dir);
+                let filename = format!("session_{}.md", &session.id[..8]);
+                let path = share_dir.join(&filename);
+                match std::fs::write(&path, &md) {
+                    Ok(_) => {
+                        println!("  {} Exported to: {}", "📤".bold(), path.display());
+                        // Try to copy path to clipboard (macOS)
+                        let _ = std::process::Command::new("sh")
+                            .args(["-c", &format!("echo '{}' | pbcopy", path.display())])
+                            .output();
+                    }
+                    Err(e) => println!("  {} Failed to export: {}", "✗".red(), e),
                 }
             }
             CommandResult::Continue

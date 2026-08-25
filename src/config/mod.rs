@@ -42,6 +42,11 @@ pub struct MithrilConfig {
     /// Per-tool permission overrides: allow, deny, or ask (default: ask for dangerous tools)
     #[serde(default)]
     pub permissions: ToolPermissions,
+    /// File extension to formatter command mapping.
+    /// e.g. {".rs": "cargo fmt -- {file}", ".ts": "prettier --write {file}"}
+    #[serde(default)]
+    pub formatters: HashMap<String, String>,
+
     /// Telegram user IDs allowed to interact with the bot.
     /// Empty list = owner mode (first user auto-registered).
     #[serde(default)]
@@ -66,6 +71,7 @@ impl Default for MithrilConfig {
             providers: ProviderSettings::default(),
             terminal_sandbox: true,
             permissions: ToolPermissions::default(),
+            formatters: HashMap::new(),
             telegram_allowed_users: Vec::new(),
             key_password: None,
             api_token: None,
