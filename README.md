@@ -184,6 +184,40 @@ graph TB
 
 ---
 
+## Installation
+
+### Pre-built binaries (recommended)
+
+Download the latest release from [GitHub Releases](https://github.com/GiacomoSaccaggi/mithril/releases):
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-macos-arm64.tar.gz | tar xz
+sudo mv mithril /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-linux-x64.tar.gz | tar xz
+sudo mv mithril /usr/local/bin/
+```
+
+### Build from source
+
+```bash
+git clone https://github.com/GiacomoSaccaggi/mithril.git
+cd mithril
+cargo build --release
+# Binary at: target/release/mithril
+```
+
+### Verify installation
+
+```bash
+mithril --version
+# mithril 0.1.0
+```
+
+---
+
 ## Quick Start
 
 ```bash
