@@ -189,15 +189,12 @@ impl SharedSession {
     /// Returns Ok if claimed, Err if already taken by someone else.
     pub fn claim_frontend(&self, frontend: u8) -> Result<()> {
         // Try to swap NONE -> frontend atomically
-        match self.active_frontend.compare_exchange(
+        if let Ok(_) = self.active_frontend.compare_exchange(
             FRONTEND_NONE,
             frontend,
             Ordering::SeqCst,
             Ordering::SeqCst,
-        ) {
-            Ok(_) => return Ok(()),
-            Err(_) => {}
-        }
+        ) { return Ok(()) }
         // Already held by the same frontend (idempotent re-claim)
         let current = self.active_frontend.load(Ordering::SeqCst);
         if current == frontend {

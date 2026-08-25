@@ -63,7 +63,7 @@ pub fn apply_compaction(messages: &mut Vec<ChatMessage>, summary: &str) {
         messages.push(sys);
     }
 
-    messages.push(ChatMessage::system(&format!(
+    messages.push(ChatMessage::system(format!(
         "[Conversation compacted — summary of previous {} messages]\n\n{}",
         original_count,
         summary

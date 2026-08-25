@@ -155,13 +155,11 @@ fn analyze_project(root: &Path) -> ProjectAnalysis {
         }
 
         // Detect config files
-        if file_name.ends_with(".yaml") || file_name.ends_with(".yml")
-            || file_name.ends_with(".toml") || file_name.ends_with(".json")
-        {
-            if rel.components().count() <= 2 {
+        if (file_name.ends_with(".yaml") || file_name.ends_with(".yml")
+            || file_name.ends_with(".toml") || file_name.ends_with(".json"))
+            && rel.components().count() <= 2 {
                 config_files.push(rel.to_string_lossy().to_string());
             }
-        }
     }
 
     // Sort languages by count

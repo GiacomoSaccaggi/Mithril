@@ -57,7 +57,7 @@ pub async fn run(fellowship_name: Option<&str>, session_id: Option<&str>) -> Res
         if steering.is_empty() {
             session.push(ChatMessage::system(default_system));
         } else {
-            session.push(ChatMessage::system(&format!("{}
+            session.push(ChatMessage::system(format!("{}
 
 {}", default_system, steering)));
         }
@@ -203,7 +203,7 @@ pub async fn run(fellowship_name: Option<&str>, session_id: Option<&str>) -> Res
                         session.push(ChatMessage::assistant(&result.response));
                     }
                     Err(e) => {
-                        eprintln!("  {} {}", "\x1b[31mError:\x1b[0m", e);
+                        eprintln!("  \x1b[31mError:\x1b[0m {}", e);
                         session.messages.lock().pop();
                     }
                 }
@@ -251,7 +251,6 @@ async fn handle_command(
 ) -> CommandResult {
     let parts: Vec<&str> = input.split_whitespace().collect();
     let command = parts.first().copied().unwrap_or("");
-    let messages = &mut *session.messages.lock();
 
     match command {
         "/exit" | "/quit" | "/q" => {
@@ -260,20 +259,18 @@ async fn handle_command(
         }
 
         "/clear" | "/c" => {
-            messages.clear();
+            session.messages.lock().clear();
             let _ = session.save();
             println!("{}", "Conversation cleared.".dimmed());
             CommandResult::Continue
         }
 
         "/help" | "/h" | "/?" => {
-            let _ = messages; // release lock before printing
             print_help();
             CommandResult::Continue
         }
 
         "/fellowship" | "/f" => {
-            let _ = messages;
             let fellowships = crate::flow::fellowship::list_fellowships();
             println!("\n  {} Current: {}", "⚔️".bold(), config.default_provider.cyan());
             println!("\n  Available:");
@@ -300,6 +297,7 @@ async fn handle_command(
 
 
         "/history" => {
+            let messages = session.messages.lock();
             if messages.is_empty() {
                 println!("{}", "(no messages yet)".dimmed());
             } else {
@@ -334,8 +332,7 @@ async fn handle_command(
 
 
         "/compact" => {
-            let msg_count = messages.len();
-            let _ = messages; // release lock before async work
+            let msg_count = session.messages.lock().len();
             if msg_count < 4 {
                 println!("  {} Not enough messages to compact (need at least 4)", "⚠".yellow());
             } else {
