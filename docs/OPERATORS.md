@@ -1,530 +1,532 @@
-# Operators Module
+# The Rangers — Operators
 
-Operators are low-level implementations for file system, terminal, git, and web operations. They are used by tools and other parts of the system.
+> *"All that is gold does not glitter, not all those who wander are lost."* — Bilbo Baggins
 
-**Location**: `src/operators/`
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `file.rs` | File read/write/delete operations |
-| `terminal.rs` | Shell command execution |
-| `git.rs` | Git repository operations |
-| `web.rs` | HTTP requests and web search |
-| `scan.rs` | Project file scanning and search |
-| `shadow.rs` | Backup/undo system for file changes |
-| `mod.rs` | Module exports |
+The Rangers patrol the boundaries between the Armory (tools) and the outside world. Each operator handles a domain with appropriate security measures.
 
 ---
 
-## file.rs — FileOperator
+## Operator Overview
 
-Basic file system operations with path resolution.
+| Ranger | Domain | Tools Served |
+|--------|--------|--------------|
+| **File** | Filesystem | `read_file`, `write_file`, `edit_file`, `delete_file`, `apply_patch`, `list_files`, `find_file`, `file_stats` |
+| **Git** | Version Control | `git_status`, `git_log`, `git_diff`, `git_blame`, `git_branch`, `git_commit` |
+| **Web** | Network | `web_search`, `fetch_page` |
+| **Terminal** | Shell | `run_terminal` |
+| **Lore** | Knowledge | `lore_write`, `lore_read` |
+| **Session** | State | `share_session` |
 
-### Struct: `FileOperator`
+---
+
+## File Operator
+
+> *"Do not meddle in the affairs of wizards, for they are subtle and quick to anger."*
+
+The File Operator manages all filesystem interactions with strict security.
+
+### Responsibilities
+
+- Path validation and canonicalization
+- Shadow log backups before modifications
+- Encoding detection and conversion
+- Directory creation as needed
+
+### Security Measures
+
+| Measure | Description |
+|---------|-------------|
+| **Path Traversal Guard** | Blocks `../` escapes |
+| **Symlink Resolution** | Follows and validates symlinks |
+| **Protected Paths** | Denies access to system files |
+| **Workspace Restriction** | Limits access to allowed roots |
+
+### Implementation
 
 ```rust
-#[derive(Clone)]
 pub struct FileOperator {
-    base_path: PathBuf,
+    workspace: PathBuf,
+    shadow_log: ShadowLog,
+    allowed_paths: Vec<PathBuf>,
+}
+
+impl FileOperator {
+    pub fn read(&self, path: &str) -> Result<String> {
+        let validated = self.validate_path(path)?;
+        std::fs::read_to_string(validated)
+            .map_err(|e| OperatorError::Read(e))
+    }
+    
+    pub fn write(&self, path: &str, content: &str) -> Result<()> {
+        let validated = self.validate_path(path)?;
+        
+        // Backup existing file
+        if validated.exists() {
+            self.shadow_log.backup(&validated)?;
+        }
+        
+        // Create parent directories
+        if let Some(parent) = validated.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        
+        std::fs::write(validated, content)
+            .map_err(|e| OperatorError::Write(e))
+    }
+    
+    fn validate_path(&self, path: &str) -> Result<PathBuf> {
+        let path = PathBuf::from(path);
+        let canonical = if path.is_absolute() {
+            path.canonicalize()?
+        } else {
+            self.workspace.join(path).canonicalize()?
+        };
+        
+        // Check against protected paths
+        for protected in PROTECTED_PATHS {
+            if canonical.starts_with(protected) {
+                return Err(OperatorError::ProtectedPath(canonical));
+            }
+        }
+        
+        // Check against allowed roots
+        let allowed = self.allowed_paths.iter()
+            .any(|root| canonical.starts_with(root));
+        
+        if !allowed && !canonical.starts_with(&self.workspace) {
+            return Err(OperatorError::PathTraversal(canonical));
+        }
+        
+        Ok(canonical)
+    }
 }
 ```
 
-### Constructor
+### Configuration
 
-```rust
-pub fn new(base_path: impl Into<PathBuf>) -> Self
-```
-
-Creates operator rooted at the given directory.
-
----
-
-### Method: `read_file`
-
-```rust
-pub fn read_file(&self, path: &str) -> String
-```
-
-Reads file content as UTF-8 string.
-
-**Parameters:**
-- `path`: Relative or absolute path
-
-**Returns:** File content or `"Error: File not found: {path}"`
-
-**Path Resolution:**
-- Absolute paths used as-is
-- Relative paths joined with `base_path`
-
----
-
-### Method: `write_file`
-
-```rust
-pub fn write_file(&self, path: &str, content: &str) -> bool
-```
-
-Writes content to file.
-
-**Behavior:**
-- Creates parent directories if they don't exist
-- Overwrites existing files
-- Returns `true` on success, `false` on failure
-
----
-
-### Method: `delete_file`
-
-```rust
-pub fn delete_file(&self, path: &str) -> bool
-```
-
-Deletes a file. Returns `true` on success.
-
----
-
-### Method: `exists`
-
-```rust
-pub fn exists(&self, path: &str) -> bool
-```
-
-Checks if a file exists.
-
----
-
-## terminal.rs — TerminalOperator
-
-Executes shell commands with timeout.
-
-### Struct: `TerminalResult`
-
-```rust
-pub struct TerminalResult {
-    pub output: String,   // Combined stdout + stderr
-    pub exit_code: i32,   // Process exit code (-1 on error)
-}
-```
-
-### Struct: `TerminalOperator`
-
-```rust
-#[derive(Clone)]
-pub struct TerminalOperator {
-    working_dir: PathBuf,
-    timeout_secs: u64,
-}
-```
-
-### Constructor
-
-```rust
-pub fn new(working_dir: impl Into<PathBuf>, timeout_secs: u64) -> Self
+```yaml
+operators:
+  file:
+    # Additional allowed paths
+    allowed_paths:
+      - /home/user/projects
+      - /tmp/mithril-work
+    
+    # Maximum file size for read (bytes)
+    max_read_size: 10485760  # 10 MB
+    
+    # Shadow log retention (days)
+    shadow_retention: 7
 ```
 
 ---
 
-### Method: `execute`
+## Git Operator
+
+> *"Even the smallest person can change the course of the future."*
+
+The Git Operator provides safe access to version control operations.
+
+### Responsibilities
+
+- Repository detection and validation
+- Safe git command execution
+- Diff generation and parsing
+- Branch management
+
+### Security Measures
+
+| Measure | Description |
+|---------|-------------|
+| **Repo Boundary** | Operations confined to repository |
+| **Read-Only by Default** | Writes require Build mode |
+| **No Force Operations** | `--force` flags blocked |
+| **No Remote Push** | Push operations require explicit confirmation |
+
+### Implementation
 
 ```rust
-pub async fn execute(&self, command: &str) -> TerminalResult
-```
-
-Executes a shell command.
-
-**Behavior:**
-1. Spawns shell process:
-   - Unix: `sh -c "{command}"`
-   - Windows: `cmd /C "{command}"`
-2. Sets working directory
-3. Waits for completion with timeout
-4. Returns combined stdout + stderr
-
-**Timeout Handling:**
-- Checks completion every 50ms
-- Returns `"[TIMEOUT WARNING: Process killed after 30 seconds]"` on timeout
-
-**Error Conditions:**
-- Spawn failure: `"Error: failed to spawn process: {e}"`
-- Timeout: exit_code = -1
-- Task panic: `"Error: task panicked"`
-
----
-
-## git.rs — GitOperator
-
-Git repository operations via CLI.
-
-### Struct: `GitOperator`
-
-```rust
-#[derive(Clone)]
 pub struct GitOperator {
-    base_path: PathBuf,
+    workspace: PathBuf,
+}
+
+impl GitOperator {
+    pub fn status(&self, path: &str) -> Result<GitStatus> {
+        let repo_root = self.find_repo_root(path)?;
+        
+        let output = Command::new("git")
+            .args(["status", "--porcelain", "-b"])
+            .current_dir(&repo_root)
+            .output()?;
+        
+        GitStatus::parse(&output.stdout)
+    }
+    
+    pub fn diff(&self, opts: DiffOptions) -> Result<String> {
+        let repo_root = self.find_repo_root(&opts.path)?;
+        
+        let mut args = vec!["diff"];
+        
+        if opts.staged {
+            args.push("--staged");
+        }
+        
+        if let Some(ref commit) = opts.commit {
+            args.push(commit);
+        }
+        
+        let output = Command::new("git")
+            .args(&args)
+            .current_dir(&repo_root)
+            .output()?;
+        
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+    
+    pub fn commit(&self, message: &str, files: &[String]) -> Result<String> {
+        // Stage files
+        for file in files {
+            self.stage_file(file)?;
+        }
+        
+        // Create commit
+        let output = Command::new("git")
+            .args(["commit", "-m", message])
+            .output()?;
+        
+        // Parse commit hash from output
+        self.parse_commit_hash(&output.stdout)
+    }
+    
+    fn find_repo_root(&self, path: &str) -> Result<PathBuf> {
+        let start = self.workspace.join(path);
+        let mut current = start.as_path();
+        
+        loop {
+            if current.join(".git").exists() {
+                return Ok(current.to_path_buf());
+            }
+            
+            current = current.parent()
+                .ok_or(OperatorError::NotARepository)?;
+        }
+    }
 }
 ```
 
-### Private Method: `run`
+### Blocked Operations
 
-```rust
-fn run(&self, args: &[&str]) -> String
-```
-
-Executes `git {args}` in the base path, returns combined output.
-
----
-
-### Method: `status`
-
-```rust
-pub fn status(&self) -> String
-```
-
-Returns `git status --short` output.
+| Operation | Reason |
+|-----------|--------|
+| `git push --force` | Destructive to remote |
+| `git reset --hard` | Destructive to local |
+| `git clean -f` | Deletes untracked files |
+| `git rebase -i` | Interactive, requires terminal |
 
 ---
 
-### Method: `log`
+## Web Operator
+
+> *"Many that live deserve death. And some that die deserve life. Can you give it to them?"*
+
+The Web Operator handles network requests safely.
+
+### Responsibilities
+
+- HTTP requests with timeout
+- Content extraction and sanitization
+- Search query execution
+- Response size limiting
+
+### Security Measures
+
+| Measure | Description |
+|---------|-------------|
+| **Timeout** | Requests timeout after 30s |
+| **Size Limit** | Response body capped at 5MB |
+| **URL Validation** | Only HTTP(S) allowed |
+| **No Internal Network** | localhost/private IPs blocked |
+
+### Implementation
 
 ```rust
-pub fn log(&self, max_entries: usize) -> String
-```
-
-Returns `git log --oneline --decorate -{n}` output.
-
----
-
-### Method: `diff`
-
-```rust
-pub fn diff(&self, target: Option<&str>) -> String
-```
-
-Returns `git diff HEAD` (full) or `git diff HEAD -- {target}` (file).
-
-**Truncation:** Output limited to 6000 characters.
-
----
-
-### Method: `blame`
-
-```rust
-pub fn blame(&self, target: &str) -> String
-```
-
-Returns `git blame --line-porcelain {target}` output.
-
-**Truncation:** Output limited to 4000 characters.
-
----
-
-### Method: `branch`
-
-```rust
-pub fn branch(&self) -> String
-```
-
-Returns `git branch --show-current` output.
-
----
-
-## web.rs — WebOperator
-
-HTTP client for web search and page fetching.
-
-### Struct: `WebOperator`
-
-```rust
-#[derive(Clone)]
 pub struct WebOperator {
     client: reqwest::Client,
+    max_response_size: usize,
+}
+
+impl WebOperator {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .user_agent("Mithril/0.1")
+            .build()
+            .unwrap();
+        
+        Self {
+            client,
+            max_response_size: 5 * 1024 * 1024,
+        }
+    }
+    
+    pub async fn fetch(&self, url: &str) -> Result<WebPage> {
+        self.validate_url(url)?;
+        
+        let response = self.client.get(url).send().await?;
+        
+        let content_length = response.content_length().unwrap_or(0);
+        if content_length > self.max_response_size as u64 {
+            return Err(OperatorError::ResponseTooLarge);
+        }
+        
+        let body = response.text().await?;
+        
+        // Extract readable content
+        let content = self.extract_content(&body)?;
+        
+        Ok(WebPage { url: url.to_string(), content })
+    }
+    
+    fn validate_url(&self, url: &str) -> Result<()> {
+        let parsed = url::Url::parse(url)?;
+        
+        // Only HTTP(S)
+        if parsed.scheme() != "http" && parsed.scheme() != "https" {
+            return Err(OperatorError::InvalidScheme);
+        }
+        
+        // No internal network
+        if let Some(host) = parsed.host_str() {
+            if host == "localhost" || host.starts_with("127.") || host.starts_with("192.168.") {
+                return Err(OperatorError::InternalNetwork);
+            }
+        }
+        
+        Ok(())
+    }
 }
 ```
 
-### Constructor
+### Search Providers
 
-```rust
-pub fn new() -> Self
+```yaml
+operators:
+  web:
+    search_provider: duckduckgo  # or google, bing
+    timeout_seconds: 30
+    max_results: 10
 ```
-
-Creates client with:
-- User-Agent: `"Mithril/0.1"`
-- Timeout: 15 seconds
 
 ---
 
-### Method: `search`
+## Terminal Operator
+
+> *"You shall not pass!"*
+
+The Terminal Operator executes shell commands within the Sanctuary.
+
+### Responsibilities
+
+- Command parsing and validation
+- Sanctuary rule enforcement
+- Process execution with timeout
+- Output capture and formatting
+
+### Security Measures
+
+| Measure | Description |
+|---------|-------------|
+| **Sanctuary** | Dangerous commands blocked |
+| **Timeout** | Commands killed after limit |
+| **No Shell Expansion** | Commands run directly |
+| **Output Limit** | stdout/stderr capped |
+
+### Implementation
 
 ```rust
-pub async fn search(&self, query: &str) -> String
+pub struct TerminalOperator {
+    workspace: PathBuf,
+    sanctuary: Sanctuary,
+    timeout: Duration,
+}
+
+impl TerminalOperator {
+    pub async fn run(&self, command: &str, working_dir: Option<&str>) -> Result<CommandOutput> {
+        // Check sanctuary rules
+        self.sanctuary.validate(command)?;
+        
+        let dir = match working_dir {
+            Some(d) => self.workspace.join(d),
+            None => self.workspace.clone(),
+        };
+        
+        let output = tokio::time::timeout(
+            self.timeout,
+            Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .current_dir(dir)
+                .output()
+        ).await??;
+        
+        Ok(CommandOutput {
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            exit_code: output.status.code().unwrap_or(-1),
+        })
+    }
+}
 ```
 
-Searches DuckDuckGo Instant Answer API.
+### Sanctuary Rules
 
-**API URL:** `https://api.duckduckgo.com/?q={query}&format=json&no_html=1&skip_disambig=1`
-
-**Response Parsing:**
-- Extracts `AbstractText` and `AbstractURL`
-- Extracts up to 5 `RelatedTopics` with text and URL
-
-**Returns:** Formatted search results or error message
+See [SECURITY.md](SECURITY.md) for full sanctuary documentation.
 
 ---
 
-### Method: `fetch_page`
+## Lore Operator
+
+> *"I sit beside the fire and think of people long ago."*
+
+The Lore Operator manages project knowledge persistence.
+
+### Responsibilities
+
+- Key-value knowledge storage
+- Tag-based organization
+- Search and retrieval
+- Cross-session persistence
+
+### Implementation
 
 ```rust
-pub async fn fetch_page(&self, url: &str) -> String
+pub struct LoreOperator {
+    store_path: PathBuf,
+}
+
+impl LoreOperator {
+    pub fn write(&self, key: &str, content: &str, tags: &[String]) -> Result<LoreEntry> {
+        let entry = LoreEntry {
+            id: Uuid::new_v4(),
+            key: key.to_string(),
+            content: content.to_string(),
+            tags: tags.to_vec(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        
+        self.persist(&entry)?;
+        Ok(entry)
+    }
+    
+    pub fn read(&self, query: LoreQuery) -> Result<Vec<LoreEntry>> {
+        let entries = self.load_all()?;
+        
+        entries.into_iter()
+            .filter(|e| self.matches_query(e, &query))
+            .collect()
+    }
+}
 ```
 
-Fetches URL and strips HTML.
+### Storage Format
 
-**HTML Stripping:**
-1. Removes `<style>` blocks
-2. Removes `<script>` blocks
-3. Removes all HTML tags
-4. Collapses whitespace
-
-**Truncation:** Output limited to 4000 characters.
+```
+.mithril/lore/
+├── index.json
+└── entries/
+    ├── architecture.md
+    ├── conventions.md
+    └── decisions.md
+```
 
 ---
 
-## scan.rs — ScanOperator
+## Session Operator
 
-Project file scanning, search, and analysis.
+> *"I will not say: do not weep; for not all tears are an evil."*
 
-### Constants
+The Session Operator handles state management and handoff.
 
-```rust
-const MAX_FILE_BYTES: u64 = 102_400;  // 100 KB max for indexing
+### Responsibilities
 
-const IGNORED_DIRS: &[&str] = &[
-    "/.git/", "/build/", "/node_modules/", "/.gradle/",
-    "/.idea/", "/dist/", "/out/", "/.celebrimbot/", "/target/"
-];
+- Session serialization
+- Share token generation
+- Cross-interface handoff
+- Cleanup and expiry
 
-const SOURCE_EXTENSIONS: &[&str] = &[
-    "kt", "java", "py", "js", "ts", "tsx", "jsx", "rs", "go",
-    "c", "cpp", "cc", "h", "hpp", "cs", "rb", "scala", "swift", "php", "kts"
-];
-```
-
-### Struct: `ScanOperator`
+### Implementation
 
 ```rust
-#[derive(Clone)]
-pub struct ScanOperator {
-    base_path: PathBuf,
+pub struct SessionOperator {
+    sessions_path: PathBuf,
+    share_tokens: HashMap<String, ShareToken>,
+}
+
+impl SessionOperator {
+    pub fn share(&mut self, session_id: Uuid, target: Interface) -> Result<String> {
+        let token = self.generate_token();
+        
+        let share = ShareToken {
+            token: token.clone(),
+            session_id,
+            created_at: Utc::now(),
+            expires_at: Utc::now() + Duration::minutes(10),
+            target,
+        };
+        
+        self.share_tokens.insert(token.clone(), share);
+        
+        Ok(token)
+    }
+    
+    pub fn load_shared(&mut self, token: &str) -> Result<Session> {
+        let share = self.share_tokens.get(token)
+            .ok_or(OperatorError::InvalidToken)?;
+        
+        if share.expires_at < Utc::now() {
+            self.share_tokens.remove(token);
+            return Err(OperatorError::TokenExpired);
+        }
+        
+        self.load_session(share.session_id)
+    }
 }
 ```
 
 ---
 
-### Method: `list_files`
+## Operator Configuration
 
-```rust
-pub fn list_files(&self, sub_path: Option<&str>, extension: Option<&str>) -> String
-```
-
-Lists files in the project.
-
-**Parameters:**
-- `sub_path`: Optional subdirectory to start from
-- `extension`: Optional extension filter (e.g., "rs")
-
-**Returns:** Newline-separated relative paths (sorted)
-
-**Filtering:**
-- Excludes ignored directories
-- Applies extension filter if provided
-
----
-
-### Method: `grep_files`
-
-```rust
-pub fn grep_files(&self, pattern: &str, extension: Option<&str>) -> String
-```
-
-Searches files for regex pattern.
-
-**Parameters:**
-- `pattern`: Regex pattern (case-insensitive)
-- `extension`: Optional extension filter
-
-**Returns:** Matches in `file:line: content` format
-
-**Limits:** Maximum 50 matches
-
----
-
-### Method: `find_by_name`
-
-```rust
-pub fn find_by_name(&self, name: &str) -> String
-```
-
-Finds files whose name contains the given fragment (case-insensitive).
-
----
-
-### Method: `file_stats`
-
-```rust
-pub fn file_stats(&self, target: &str) -> String
-```
-
-Returns file statistics.
-
-**Output Format:**
-```
-File: {path}
-Size: {bytes} bytes
-Lines: {total}
-Blank lines: {blank}
-Code lines: {code}
+```yaml
+# ~/.mithril/config.yaml
+operators:
+  file:
+    max_read_size: 10485760
+    shadow_retention: 7
+    
+  git:
+    allow_push: false
+    allow_force: false
+    
+  web:
+    timeout_seconds: 30
+    max_response_size: 5242880
+    search_provider: duckduckgo
+    
+  terminal:
+    timeout_seconds: 30
+    max_output_size: 1048576
+    sanctuary_enabled: true
+    
+  lore:
+    max_entry_size: 102400
+    
+  session:
+    share_token_expiry_minutes: 10
+    max_sessions: 100
 ```
 
 ---
 
-### Method: `walk_source_files`
-
-```rust
-pub fn walk_source_files(&self) -> Vec<String>
-```
-
-Returns relative paths of all indexable source files.
-
-**Filtering Criteria:**
-- Has source extension (see `SOURCE_EXTENSIONS`)
-- Not in ignored directory
-- Size ≤ 100KB
-- Not a binary file (no null bytes in first 512 bytes)
-
-**Used by:** Palantír index builder
-
----
-
-## shadow.rs — ShadowOperator
-
-Backup and undo system for file modifications.
-
-### Constants
-
-```rust
-const MAX_BACKUP_BYTES: u64 = 1_048_576;  // 1 MB max backup
-const SHADOW_ROOT: &str = ".celebrimbot/shadow_log";
-```
-
-### Structs
-
-```rust
-pub struct ShadowOperation {
-    pub op_type: String,         // "WRITE" or "DELETE"
-    pub path: String,            // Relative file path
-    pub backup_file: Option<String>,  // Backup filename
-    pub existed: bool,           // Did file exist before?
-    pub skipped: bool,           // Was backup skipped (too large)?
-}
-
-pub struct ShadowManifest {
-    pub session_id: String,
-    pub created_at: String,
-    pub operations: Vec<ShadowOperation>,
-}
-
-pub struct UndoResult {
-    pub session_id: String,
-    pub restored: Vec<String>,    // Files restored to previous state
-    pub deleted_new: Vec<String>, // New files deleted
-    pub recreated: Vec<String>,   // Deleted files recreated
-    pub errors: Vec<String>,
-}
-```
-
----
-
-### Method: `start_session`
-
-```rust
-pub fn start_session(&mut self) -> String
-```
-
-Starts a new shadow log session.
-
-**Behavior:**
-1. Creates session directory: `.celebrimbot/shadow_log/session_2024-01-01T12-00-00/`
-2. Adds `.celebrimbot/` to `.gitignore` if not present
-3. Returns session ID
-
----
-
-### Method: `end_session`
-
-```rust
-pub fn end_session(&mut self)
-```
-
-Ends current session and saves manifest.
-
-**Behavior:**
-1. Writes `manifest.json` with all operations
-2. Prunes old sessions (keeps last `max_sessions`)
-
----
-
-### Method: `backup_before_write`
-
-```rust
-pub fn backup_before_write(&mut self, relative_path: &str)
-```
-
-Called before writing a file.
-
-**Behavior:**
-- If file doesn't exist: records operation (no backup needed)
-- If file > 1MB: skips backup, records as skipped
-- Otherwise: copies file to session directory
-
----
-
-### Method: `backup_before_delete`
-
-```rust
-pub fn backup_before_delete(&mut self, relative_path: &str)
-```
-
-Called before deleting a file.
-
-**Behavior:** Same as `backup_before_write` but marks as DELETE operation.
-
----
-
-### Method: `undo_last_session`
-
-```rust
-pub fn undo_last_session(&self) -> UndoResult
-```
-
-Undoes the most recent session.
-
-**For WRITE operations:**
-- If file existed: restore from backup
-- If file didn't exist: delete the new file
-
-**For DELETE operations:**
-- If file existed: restore from backup
-
-**Cleanup:** Removes session directory if no errors.
-
----
-
-### Method: `list_sessions`
-
-```rust
-pub fn list_sessions(&self) -> Vec<SessionSummary>
-```
-
-Returns all sessions sorted by ID (oldest first).
+> *"The Rangers have ever been friends to the Shire."*

@@ -1,247 +1,371 @@
-# Token Efficiency
+# Wisdom in Token Usage
 
-Mithril has three independent mechanisms that dramatically reduce the number of tokens sent to the LLM on every request. This matters both for cost (cloud providers) and speed (local models).
+> *"All we have to decide is what to do with the time that is given us."* — Gandalf
+
+Tokens are the currency of the realm. This guide covers how Mithril manages token budgets and how to use them wisely.
 
 ---
 
-## The Problem: Naive context injection
+## Understanding Tokens
 
-A typical AI coding assistant injects the entire project into the system prompt on every request:
+### What Is a Token?
+
+A token is roughly 4 characters of English text, or 0.75 words. Code tends to be more token-dense than prose.
+
+| Content | ~Tokens |
+|---------|---------|
+| "hello" | 1 |
+| "Hello, world!" | 3 |
+| 100 lines of code | 500-1000 |
+| 1 page of text | 300-500 |
+
+### Token Costs
+
+Every interaction has two token costs:
+
+| Type | Description |
+|------|-------------|
+| **Input** | Your message + context + system prompt |
+| **Output** | Model's response |
+
+Cloud providers typically charge 3-10x more for output tokens.
+
+---
+
+## Token Budget System
+
+### Per-Agent Budgets
+
+Define limits for each agent in fellowship config:
+
+```yaml
+agents:
+  - name: worker
+    provider: gemini
+    model: gemini-2.5-flash
+    token_budget: 50000
+    
+  - name: reviewer
+    provider: anthropic
+    model: claude-sonnet-4-20250514
+    token_budget: 20000
+```
+
+### Session Budget
+
+Overall session limit:
+
+```yaml
+token_budget: 100000  # Total for all agents
+```
+
+### Budget Enforcement
+
+| Threshold | Behavior |
+|-----------|----------|
+| 80% used | Warning displayed |
+| 95% used | New requests require confirmation |
+| 100% used | Requests blocked until reset |
+
+### Checking Usage
 
 ```
-System prompt:
-  "You are a coding assistant. Here is the full project:"
-  [src/main.rs — 300 lines]
-  [src/lib.rs — 800 lines]
-  [src/api/server.rs — 200 lines]
-  ... 40 more files ...
+/tokens
+```
+
+Output:
+```
+Token Usage (this session):
+  gemini-2.5-flash:    Input: 12,500 / 50,000  Output: 8,200
+  local/qwen-7b:       Input: 3,200           Output: 2,100
   
-User: "Fix the bug in the auth handler"
-```
+Session Total: 26,000 / 100,000 (26%)
 
-This costs **30,000–100,000 tokens per request** on a medium-sized project.
+Estimated Cost: $0.42
+```
 
 ---
 
-## Mechanism 1 — Palantír BM25 Index
+## Reducing Token Usage
 
-```mermaid
-flowchart LR
-    Q["User query:\n'Fix bug in auth handler'"]
-    I[Palantír BM25 Index]
-    F1[src/api/server.rs]
-    F2[src/config/mod.rs]
-    F3[src/api/mcp.rs]
-    FN[... 40 other files ...]
+### 1. Use Local Models for Simple Tasks
 
-    Q -->|BM25 search| I
-    I -->|score: 0.94| F1
-    I -->|score: 0.71| F2
-    I -->|score: 0.58| F3
-    I -->|score: 0.01 — excluded| FN
-
-    F1 --> CTX[Context injected\n~2,000 tokens]
-    F2 --> CTX
-    F3 --> CTX
+```yaml
+controller:
+  provider: local
+  model: qwen-1.5b  # Routing is cheap locally
 ```
 
-### How it works
+Local models have zero token cost for cloud budgets.
 
-1. Run `mithril scan` once per project — builds a BM25 index over all source files
-2. The index is stored in `.celebrimbot/palantir_index.json`
-3. On every request, the query is tokenized and scored against all documents
-4. Only the top-N files (default: 5) are injected into the prompt
+### 2. Be Specific in Requests
 
-### BM25 scoring
+❌ Wasteful:
+```
+Look at all my code and tell me everything about it
+```
 
-BM25 (Best Match 25) is the industry-standard IR algorithm used by Elasticsearch and Solr. Mithril uses:
-- **k₁ = 1.5** — term frequency saturation
-- **b = 0.75** — length normalization
-- **Robertson-Sparck Jones IDF** — inverse document frequency
+✅ Efficient:
+```
+Review src/auth/jwt.rs for security issues
+```
 
-Files with low relevance scores are excluded entirely — they never reach the LLM.
+### 3. Use Plan Mode for Exploration
 
-### Token savings
+Plan mode restricts write operations but also uses simpler prompts, reducing input tokens.
 
-| Project size | Naive approach | With Palantír | Saving |
-|-------------|---------------|---------------|--------|
-| 10 files | ~5,000 tokens | ~2,000 tokens | 60% |
-| 50 files | ~25,000 tokens | ~2,000 tokens | 92% |
-| 200 files | ~100,000 tokens | ~2,000 tokens | 98% |
+### 4. Leverage the Palantír
 
-### Symbol extraction
+The BM25 index finds relevant context efficiently. Instead of including entire files, Mithril injects only the relevant chunks.
 
-The Palantír index also extracts symbols per file (functions, structs, traits, classes) by language:
+### 5. Clear Context When Switching Tasks
 
-| Language | Extracted patterns |
-|----------|--------------------|
-| Rust | `fn`, `struct`, `enum`, `trait`, `impl`, `mod`, `const` |
-| Python | `def`, `class` |
-| TypeScript/JS | `function`, `class`, `const`, `interface` |
-| Go | `func`, `type`, `struct` |
-| Java | `class`, `interface`, `void`, `public` |
+```
+/clear
+```
 
-Symbols boost relevance scoring for queries like "where is `validate_command` defined?".
+Long conversation histories inflate input tokens.
 
-### Incremental updates
+---
 
-The index is **stale-aware**: files are only re-indexed if their content has changed. A 20% stale threshold triggers a rebuild of changed files while reusing the rest.
+## Context Window Management
+
+### Window Sizes
+
+| Provider | Typical Window |
+|----------|----------------|
+| Local (7B) | 4K-8K |
+| Gemini | 1M-2M |
+| OpenAI | 128K |
+| Anthropic | 200K |
+
+### Automatic Truncation
+
+When context exceeds the window:
+
+1. Oldest messages removed first
+2. System prompt always preserved
+3. Recent tool results preserved
+4. User gets notification
+
+### Manual Control
+
+```
+/context
+```
+
+Shows current context size and breakdown.
+
+---
+
+## Token-Efficient Patterns
+
+### Pattern 1: Progressive Disclosure
+
+Start broad, then narrow:
+
+```
+1. "What files handle authentication?"
+   → Model returns file list (few tokens)
+
+2. "Explain src/auth/jwt.rs"
+   → Focus on specific file
+```
+
+### Pattern 2: Batch Operations
+
+❌ Multiple small requests:
+```
+"Read src/a.rs"
+"Read src/b.rs"
+"Read src/c.rs"
+```
+
+✅ Single batch request:
+```
+"Read src/a.rs, b.rs, and c.rs"
+```
+
+### Pattern 3: Template Reuse
+
+For repetitive tasks, define custom commands:
+
+```yaml
+commands:
+  /review-file:
+    prompt: "Review {arg} for: security issues, error handling, code style"
+```
+
+The prompt template is shorter than re-explaining each time.
+
+### Pattern 4: Checkpoint and Continue
+
+For long tasks:
+```
+"Continue from where you left off"
+```
+
+Model doesn't need full re-explanation.
+
+---
+
+## Cost Estimation
+
+### Rough Provider Pricing
+
+| Provider | Input (1M tok) | Output (1M tok) |
+|----------|---------------|-----------------|
+| Gemini Flash | $0.075 | $0.30 |
+| Gemini Pro | $1.25 | $5.00 |
+| GPT-4o | $2.50 | $10.00 |
+| Claude Sonnet | $3.00 | $15.00 |
+| Local | Free | Free |
+
+*Prices approximate, check provider for current rates.*
+
+### Session Cost Display
+
+Enable cost tracking:
+
+```yaml
+tokens:
+  show_costs: true
+  currency: USD
+```
+
+Now `/tokens` shows estimated costs.
+
+---
+
+## Token Metrics
+
+### What's Measured
+
+| Metric | Description |
+|--------|-------------|
+| `input_tokens` | Tokens sent to model |
+| `output_tokens` | Tokens received from model |
+| `context_tokens` | Tokens from Palantír injection |
+| `system_tokens` | System prompt tokens |
+| `tool_tokens` | Tool call/result tokens |
+
+### Export Metrics
 
 ```bash
-# Build index (first time: ~2s for 100 files)
-mithril scan
+mithril sessions --export "session-name" --format json
+```
 
-# Subsequent runs: only changed files are re-indexed (~0.1s)
-mithril scan
+Includes full token breakdown per message.
+
+---
+
+## Optimizing System Prompts
+
+### Default System Prompt
+
+Mithril's default system prompt is optimized for efficiency while maintaining capability.
+
+### Custom System Prompts
+
+In `MITHRIL.md`:
+
+```markdown
+# Project: MyApp
+
+## Context
+A REST API in Rust using Actix-web.
+
+## Style
+- Use async/await
+- Error handling with anyhow
+- Tests with #[tokio::test]
+```
+
+Keep it concise — every word costs tokens.
+
+### System Prompt Caching
+
+Providers like Anthropic support prompt caching:
+
+```yaml
+providers:
+  anthropic:
+    cache_system_prompt: true
+```
+
+Cached prompts are heavily discounted on repeat calls.
+
+---
+
+## Multi-Agent Token Strategy
+
+### Classifier Efficiency
+
+The GGUF classifier should be tiny:
+
+```yaml
+controller:
+  provider: local
+  model: qwen-1.5b
+  context_window: 2  # Only see last 2 messages
+```
+
+It routes requests at minimal token cost.
+
+### Agent Specialization
+
+| Agent | Model | Purpose |
+|-------|-------|---------|
+| classifier | qwen-1.5b | Routing (1-2K tokens) |
+| worker | gemini-flash | Fast tasks (5-20K tokens) |
+| reviewer | claude-sonnet | Complex review (10-50K tokens) |
+
+Don't use expensive models for simple tasks.
+
+---
+
+## Monitoring and Alerts
+
+### Usage Alerts
+
+```yaml
+tokens:
+  alerts:
+    - threshold: 50000
+      action: warn
+    - threshold: 90000
+      action: confirm
+    - threshold: 100000
+      action: block
+```
+
+### Session Reports
+
+End of session summary:
+
+```
+Session ended.
+Duration: 45 minutes
+Messages: 23
+Tokens: 34,500 (input: 12,000, output: 22,500)
+Estimated cost: $0.89
+Most used: gemini-2.5-flash (28,000 tokens)
 ```
 
 ---
 
-## Mechanism 2 — Shadow Log Diff
+## Best Practices Summary
 
-```mermaid
-sequenceDiagram
-    participant LLM
-    participant Shadow as Shadow Operator
-    participant FS as Filesystem
-
-    LLM->>Shadow: write_file("src/main.rs", new_content)
-    Shadow->>FS: backup current version to .celebrimbot/shadow_log/
-    Shadow->>FS: write new version
-
-    Note over LLM,FS: Next request — only diff injected
-
-    LLM->>Shadow: show me what changed
-    Shadow->>FS: read backup + current
-    Shadow->>LLM: unified diff (~50 lines, ~500 tokens)
-    Note right of LLM: Instead of full file (~300 lines, ~3000 tokens)
-```
-
-### How it works
-
-1. Every `write_file` tool call creates a backup in `.celebrimbot/shadow_log/session_<timestamp>/`
-2. On the next request, the LLM can ask for diffs instead of full file content
-3. `mithril undo` reverts all writes in the last session
-
-### Token savings
-
-| File size | Full file | Diff after small change | Saving |
-|-----------|-----------|------------------------|--------|
-| 100 lines | ~1,000 tokens | ~80 tokens | 92% |
-| 500 lines | ~5,000 tokens | ~200 tokens | 96% |
-| 2,000 lines | ~20,000 tokens | ~500 tokens | 97.5% |
+| Practice | Token Impact |
+|----------|--------------|
+| Use local classifier | -90% routing cost |
+| Specific questions | -50% input tokens |
+| Palantír context | -70% vs full files |
+| Clear between tasks | -30% accumulated context |
+| Plan mode for exploration | -20% overall |
+| Batch similar operations | -40% overhead |
+| Template custom commands | -25% repeated prompts |
 
 ---
 
-## Mechanism 3 — MCP On-Demand Tool Calling
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant LLM
-    participant MCP as Mithril MCP
-
-    User->>LLM: "What does the auth handler do?"
-
-    Note over LLM: Does NOT receive any files upfront
-
-    LLM->>MCP: tools/call read_psi {target: "src/api/server.rs"}
-    MCP->>LLM: File content (only this file, ~2,000 tokens)
-
-    LLM->>MCP: tools/call grep_files {pattern: "auth", path: "."}
-    MCP->>LLM: 3 matching lines with context (~200 tokens)
-
-    LLM->>User: "The auth handler validates tokens by..."
-
-    Note over LLM,MCP: Total: ~2,200 tokens\nvs 50,000 tokens if all files were pre-loaded
-```
-
-### How it works
-
-Instead of loading all files into the system prompt, the LLM:
-1. Receives a short system prompt describing available tools
-2. Reads only the files it actually needs, on demand
-3. Uses `grep_files` to find relevant sections instead of reading everything
-
-### Tool call overhead
-
-Each MCP tool call adds ~200 tokens (tool definition + call + result). But this is far cheaper than injecting unused files:
-
-```
-Pre-loaded approach:
-  System prompt: 50 files × 500 tokens = 25,000 tokens
-  Per request overhead: 25,000 tokens
-
-On-demand approach:
-  System prompt: 200 tokens (tool descriptions)
-  Per tool call: ~200 tokens
-  Typical session: 5 calls × 200 tokens = 1,000 tokens
-  Total: 1,200 tokens (95% less)
-```
-
----
-
-## Combined effect
-
-In a typical coding session with Mithril + Junie on a 100-file project:
-
-```mermaid
-graph LR
-    subgraph NaiveApproach["❌ Without Mithril"]
-        N1["System prompt:<br/>100 files × 500 tokens"] --> N2["50,000 tokens/request"]
-        N2 --> N3["$0.50/request @ GPT-4o"]
-    end
-
-    subgraph MithrilApproach["✅ With Mithril"]
-        M1["Palantír: top-5 files<br/>2,000 tokens"] --> M4["Total: ~3,200 tokens"]
-        M2["Shadow diff:<br/>500 tokens"] --> M4
-        M3["MCP on-demand:<br/>700 tokens"] --> M4
-        M4 --> M5["$0.03/request @ GPT-4o<br/>94% cost reduction"]
-    end
-```
-
-| Metric | Without Mithril | With Mithril | Improvement |
-|--------|----------------|--------------|-------------|
-| Tokens/request | ~50,000 | ~3,200 | **−94%** |
-| Cost @ GPT-4o | $0.50 | $0.03 | **−94%** |
-| Local inference time | ~180s (qwen-7b) | ~12s (qwen-7b) | **−93%** |
-| Context window used | 100% (often overflow) | 6% | **Fits any model** |
-
----
-
-## Configuration
-
-### Palantír index location
-
-```
-.celebrimbot/palantir_index.json   # in project root
-```
-
-### Shadow log location
-
-```
-.celebrimbot/shadow_log/           # in project root
-```
-
-Both directories are automatically added to `.gitignore`.
-
-### Adjusting top-N files injected
-
-The number of files returned by Palantír is set in `src/index/palantir.rs`:
-
-```rust
-// Default: top 5 files per query
-pub fn query(&self, query: &str, top_n: usize) -> Vec<SearchResult>
-```
-
-Pass a different `top_n` value when calling from your integration.
-
----
-
-## Best practices
-
-1. **Always run `mithril scan` after cloning** — the index is not committed to git
-2. **Re-scan after large refactors** — new files won't appear in results until indexed
-3. **Use `grep_files` before `read_psi`** — read a whole file only when grep narrows it down
-4. **Keep sessions short** — shadow log groups writes per session; `mithril undo` reverts one session at a time
-5. **Use `git_diff` instead of `read_psi`** — after making changes, ask for `git_diff` rather than re-reading modified files
+> *"A wizard is never late, nor is he early. He arrives precisely when he means to."*

@@ -27,6 +27,9 @@ cd mithril
 
 # Install the tools of the Dwarves
 brew install cmake  # macOS
+# or: sudo apt install build-essential cmake  # Linux
+
+# Forge the artifact
 cargo build --release
 
 # Light your torch (run tests)
@@ -183,16 +186,18 @@ These are in `.gitignore`. Respect it as you would the borders of Lothlórien.
 src/
 ├── main.rs          # The Shire (where the journey starts)
 ├── engine/          # Khazad-dûm (deep inference mines)
-├── providers/       # The Five Wizards (LLM backends)
+├── providers/       # The Five Istari (LLM backends)
 ├── flow/            # Rivendell (orchestration council)
-├── tools/           # The Armory of Gondor (21 weapons)
+├── tools/           # The Armory (24 weapons)
 ├── operators/       # The Rangers (execute in the wild)
-├── api/             # The Beacon Towers (HTTP signals)
+├── api/             # The Beacons (HTTP signals)
 ├── tui/             # Minas Tirith (the visible city)
-├── session/         # The Palantír Network (persistent sight)
-├── index/           # The Palantír itself (BM25 search)
+├── session/         # Session persistence and handoff
+├── index/           # The Palantír (BM25 search)
 └── config/          # The Vaults (encrypted treasures)
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full map of the realms.
 
 ---
 
@@ -205,12 +210,29 @@ cargo test
 # Build check (the gates must hold)
 cargo check
 
+# Format check (the customs of the Elves)
+cargo fmt --check
+
+# Lint check (the wisdom of the Wise)
+cargo clippy
+
 # Documentation (the libraries of Minas Tirith)
 cargo doc --open
-
-# End-to-end (the full quest)
-./tests/e2e_test.sh
 ```
+
+---
+
+## Documentation (The Great Libraries)
+
+If you change functionality, update the relevant documentation:
+
+| Change | Update |
+|--------|--------|
+| New tool | [docs/TOOLS.md](docs/TOOLS.md) |
+| New command | [docs/CLI.md](docs/CLI.md) |
+| Security change | [docs/SECURITY.md](docs/SECURITY.md) |
+| API change | [docs/API.md](docs/API.md) |
+| New provider | [docs/PROVIDERS.md](docs/PROVIDERS.md) |
 
 ---
 

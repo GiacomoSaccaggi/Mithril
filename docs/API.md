@@ -1,330 +1,619 @@
-# API Module
+# The Beacons — API Reference
 
-The API module provides HTTP endpoints compatible with Ollama, OpenAI, and MCP protocols.
+> *"The beacons of Minas Tirith! The beacons are lit! Gondor calls for aid!"* — Pippin
 
-**Location**: `src/api/`
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `server.rs` | Axum HTTP server, `AppState`, graceful shutdown |
-| `ollama.rs` | Ollama-compatible API endpoints |
-| `openai.rs` | OpenAI-compatible API endpoints |
-| `mcp.rs` | Model Context Protocol (JSON-RPC 2.0) |
-| `mod.rs` | Module exports |
+Mithril exposes three API dialects: Ollama-compatible, OpenAI-compatible, and MCP JSON-RPC. This document details each endpoint.
 
 ---
 
-## server.rs — HTTP Server
+## API Overview
 
-### Struct: `AppState`
+| Dialect | Base Path | Purpose |
+|---------|-----------|---------|
+| Ollama | `/api/*` | Ollama client compatibility |
+| OpenAI | `/v1/*` | OpenAI SDK compatibility |
+| MCP | `/mcp` | Model Context Protocol tools |
 
-Shared application state passed to all handlers via Axum's `State` extractor.
-
-```rust
-#[derive(Clone)]
-pub struct AppState {
-    pub model_manager: Arc<LazyModelManager>,
-    pub tool_registry: Arc<ToolRegistry>,
-    pub file_operator: Arc<FileOperator>,
-    pub scan_operator: Arc<ScanOperator>,
-    pub project_path: String,
-    /// Tracks active model downloads: model_id → status ("pulling" | "success" | "error")
-    pub active_downloads: Arc<Mutex<HashMap<String, String>>>,
-}
-```
-
-### Route table
-
-| Method | Path | Handler | API |
-|--------|------|---------|-----|
-| GET | `/health` | `health()` | Health check |
-| GET | `/api/tags` | `ollama::list_models` | Ollama |
-| GET | `/api/version` | `ollama::version` | Ollama |
-| GET | `/api/ps` | `ollama::running_models` | Ollama |
-| POST | `/api/generate` | `ollama::generate` | Ollama |
-| POST | `/api/chat` | `ollama::chat` | Ollama |
-| POST | `/api/show` | `ollama::show_model` | Ollama |
-| POST | `/api/pull` | `ollama::pull_model` | Ollama |
-| POST | `/api/embed` | `ollama::embed` | Ollama |
-| POST | `/v1/chat/completions` | `openai::chat_completions` | OpenAI |
-| GET | `/v1/models` | `openai::list_models` | OpenAI |
-| POST | `/mcp` | `mcp::handle_mcp` | MCP |
-
-### Graceful shutdown
-
-The server intercepts `Ctrl+C` (SIGINT) via `tokio::signal::ctrl_c()` and calls `model_manager.force_unload()` before exiting. This ensures the GGUF model is cleanly released from GPU memory.
-
-```mermaid
-sequenceDiagram
-    participant OS
-    participant Server
-    participant Model
-
-    OS->>Server: SIGINT (Ctrl+C)
-    Server->>Model: force_unload()
-    Model->>Model: drop LlamaModel + LlamaBackend
-    Server->>OS: exit(0)
-```
+Default port: `16180` (the golden ratio × 10,000)
 
 ---
 
-## Endpoint: `GET /health`
+## Health Check
 
-Returns server status and model state.
+```
+GET /health
+```
 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "model_loaded": false,
-  "version": "0.1.0"
+  "status": "healthy",
+  "version": "0.1.0",
+  "model_loaded": true,
+  "uptime_seconds": 3600
 }
 ```
 
 ---
 
-## ollama.rs — Ollama API
+## Ollama API
 
-### Endpoint: `POST /api/chat`
+> *"Short cuts make long delays."*
 
-**Streaming flow:**
+Full compatibility with Ollama clients.
 
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Handler as ollama::chat
-    participant Bridge as Bridge Thread
-    participant Engine as LazyModelManager
+### List Models
 
-    Client->>Handler: POST /api/chat {stream:true}
-    Handler->>Engine: infer_streaming(prompt, std_tx)
-    Note over Engine: Spawns std::thread (LlamaModel is !Send)
-    Handler->>Bridge: spawn_blocking reads std_rx → tok_tx
-    Handler->>Client: HTTP 200 (stream open)
+```
+GET /api/tags
+```
 
-    loop per token
-        Engine->>Bridge: std_tx.send(Some("token"))
-        Bridge->>Handler: tok_tx.blocking_send(Some("token"))
-        Handler->>Client: {"message":{"content":"token"},"done":false}\n
-    end
+**Response:**
+```json
+{
+  "models": [
+    {
+      "name": "qwen2.5-7b-instruct",
+      "modified_at": "2024-01-15T10:30:00Z",
+      "size": 4500000000,
+      "digest": "sha256:abc123...",
+      "details": {
+        "format": "gguf",
+        "family": "qwen2",
+        "parameter_size": "7B",
+        "quantization_level": "Q4_K_M"
+      }
+    }
+  ]
+}
+```
 
-    Engine->>Bridge: std_tx.send(None)
-    Bridge->>Handler: tok_tx.blocking_send(None)
-    Handler->>Client: {"message":{"content":""},"done":true}\n
+### Chat Completion
+
+```
+POST /api/chat
 ```
 
 **Request:**
 ```json
 {
-  "model": "qwen-1.5b",
+  "model": "qwen2.5-7b-instruct",
   "messages": [
-    { "role": "system", "content": "You are helpful." },
-    { "role": "user", "content": "Hello!" }
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello!"}
   ],
   "stream": true,
-  "options": { "temperature": 0.7, "num_predict": 2048 }
+  "options": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "num_predict": 1024
+  }
 }
 ```
 
-**Streaming response (NDJSON, one line per token):**
-```
-{"model":"qwen-1.5b","created_at":"...","message":{"role":"assistant","content":"Hello"},"done":false}
-{"model":"qwen-1.5b","created_at":"...","message":{"role":"assistant","content":"!"},"done":false}
-{"model":"qwen-1.5b","created_at":"...","message":{"role":"assistant","content":""},"done":true}
+**Streaming Response:**
+```json
+{"message": {"role": "assistant", "content": "Hello"}, "done": false}
+{"message": {"role": "assistant", "content": "!"}, "done": false}
+{"message": {"role": "assistant", "content": " How"}, "done": false}
+{"done": true, "total_duration": 1234567890, "eval_count": 42}
 ```
 
-**Non-streaming response:**
+**Non-Streaming Response:**
 ```json
 {
-  "model": "qwen-1.5b",
-  "created_at": "2024-01-01T00:00:00Z",
-  "message": { "role": "assistant", "content": "Hello! How can I help?" },
-  "done": true
+  "message": {
+    "role": "assistant",
+    "content": "Hello! How can I help you today?"
+  },
+  "done": true,
+  "total_duration": 1234567890,
+  "load_duration": 100000000,
+  "prompt_eval_count": 15,
+  "prompt_eval_duration": 500000000,
+  "eval_count": 42,
+  "eval_duration": 600000000
 }
 ```
 
-**Error responses:**
+### Generate (Legacy)
 
-| Condition | HTTP status | Body |
-|-----------|-------------|------|
-| Model not in catalog | 404 | `{"error":"model not found: xyz"}` |
-| Inference failure | 500 | `{"error":"..."}` |
-| Malformed JSON | 422 | Axum default |
-
----
-
-### Endpoint: `POST /api/pull`
-
-Downloads a model in the background. Returns immediately with status `pulling manifest`.
-
-**Request:**
-```json
-{ "model": "qwen-7b" }
 ```
-
-**Responses:**
-
-```json
-{ "status": "pulling manifest", "model": "qwen-7b" }
+POST /api/generate
 ```
-
-```json
-{ "status": "already pulling", "model": "qwen-7b" }
-```
-
-The download runs via `tokio::spawn` delegating to `cli::download::run()`. Progress is tracked in `AppState.active_downloads`:
-
-```rust
-pub active_downloads: Arc<Mutex<HashMap<String, String>>>
-// "qwen-7b" → "pulling" | "success" | "error"
-```
-
----
-
-### Endpoint: `POST /api/embed`
-
-**Embeddings are not supported** in this build. Returns `501 Not Implemented`.
-
-```json
-HTTP 501
-{ "error": "embeddings are not supported in this build of Mithril" }
-```
-
-> This is intentional: returning an empty array silently (as before) would cause clients to silently misbehave. A 501 error forces the client to handle the unsupported case.
-
----
-
-## openai.rs — OpenAI API
-
-### Endpoint: `POST /v1/chat/completions`
 
 **Request:**
 ```json
 {
-  "model": "qwen-1.5b",
-  "messages": [{ "role": "user", "content": "Hello!" }],
-  "temperature": 0.7,
-  "max_tokens": 2048
+  "model": "qwen2.5-7b-instruct",
+  "prompt": "Why is the sky blue?",
+  "stream": false,
+  "options": {
+    "temperature": 0.7,
+    "num_predict": 256
+  }
 }
 ```
 
 **Response:**
 ```json
 {
-  "id": "chatcmpl-<uuid>",
-  "object": "chat.completion",
-  "created": 1234567890,
-  "model": "qwen-1.5b",
-  "choices": [{
-    "index": 0,
-    "message": { "role": "assistant", "content": "Hello!" },
-    "finish_reason": "stop"
-  }],
-  "usage": { "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0 }
+  "response": "The sky appears blue due to Rayleigh scattering...",
+  "done": true,
+  "context": [1, 2, 3, ...],
+  "total_duration": 1234567890,
+  "eval_count": 128
 }
 ```
 
-> Token counts are not tracked (always 0). This is a known limitation.
+### Model Operations
 
-**Model fallback:** If the requested model is not in the catalog, the first model (`qwen-1.5b`) is used as a fallback instead of returning 404. This improves compatibility with clients that send arbitrary model names.
+```
+POST /api/pull
+```
+
+**Request:**
+```json
+{
+  "name": "qwen2.5:7b"
+}
+```
+
+**Response:** Streaming progress updates.
 
 ---
 
-## mcp.rs — Model Context Protocol
+## OpenAI API
 
-Implements [MCP JSON-RPC 2.0](https://spec.modelcontextprotocol.io/) (protocol version `2024-11-05`).
+> *"Even the very wise cannot see all ends."*
 
-### Supported methods
+OpenAI SDK compatibility for broad client support.
 
-| Method | Description |
-|--------|-------------|
-| `initialize` | Handshake, returns capabilities |
-| `notifications/initialized` | Acknowledgment (no response) |
-| `tools/list` | Returns all 21 tool definitions |
-| `tools/call` | Executes a tool |
-| `resources/list` | Lists project files |
-| `resources/read` | Reads a file |
+### List Models
 
-### `tools/call` flow
-
-```mermaid
-flowchart TD
-    R[JSON-RPC request\ntools/call] --> D[dispatch_mcp]
-    D --> L[Look up tool in ToolRegistry]
-    L -->|found| E[tool.execute args]
-    L -->|not found| ERR[isError: true\n'tool not found']
-    E -->|success| OK[isError: false\ncontent: text]
-    E -->|error| ERR2[isError: false\ncontent: error message\nnote: tool ran but failed]
+```
+GET /v1/models
 ```
 
-### `initialize` response
+**Response:**
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "qwen2.5-7b-instruct",
+      "object": "model",
+      "created": 1705315800,
+      "owned_by": "local"
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "object": "model",
+      "created": 1705315800,
+      "owned_by": "google"
+    }
+  ]
+}
+```
 
+### Chat Completion
+
+```
+POST /v1/chat/completions
+```
+
+**Request:**
+```json
+{
+  "model": "qwen2.5-7b-instruct",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Hello!"}
+  ],
+  "stream": true,
+  "temperature": 0.7,
+  "max_tokens": 1024,
+  "top_p": 0.9
+}
+```
+
+**Streaming Response (SSE):**
+```
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1705315800,"model":"qwen2.5-7b-instruct","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1705315800,"model":"qwen2.5-7b-instruct","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1705315800,"model":"qwen2.5-7b-instruct","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+**Non-Streaming Response:**
+```json
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1705315800,
+  "model": "qwen2.5-7b-instruct",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Hello! How can I help you today?"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 42,
+    "total_tokens": 57
+  }
+}
+```
+
+### Tool Calls
+
+```json
+{
+  "model": "qwen2.5-7b-instruct",
+  "messages": [...],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "read_file",
+        "description": "Read contents of a file",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {"type": "string"}
+          },
+          "required": ["path"]
+        }
+      }
+    }
+  ],
+  "tool_choice": "auto"
+}
+```
+
+---
+
+## MCP API
+
+> *"I am a servant of the Secret Fire, wielder of the flame of Anor."*
+
+Model Context Protocol for tool-using agents.
+
+### Endpoint
+
+```
+POST /mcp
+```
+
+All requests use JSON-RPC 2.0 format.
+
+### List Tools
+
+**Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}
+```
+
+**Response:**
 ```json
 {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "protocolVersion": "2024-11-05",
-    "capabilities": { "tools": {}, "resources": {} },
-    "serverInfo": { "name": "mithril", "version": "0.1.0" }
+    "tools": [
+      {
+        "name": "read_file",
+        "description": "Read the contents of a file",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the file"
+            }
+          },
+          "required": ["path"]
+        }
+      }
+    ]
   }
 }
 ```
 
-### `tools/call` request and response
+### Call Tool
 
 **Request:**
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 3,
+  "id": 2,
   "method": "tools/call",
   "params": {
-    "name": "read_psi",
-    "arguments": { "target": "src/main.rs" }
+    "name": "read_file",
+    "arguments": {
+      "path": "src/main.rs"
+    }
   }
 }
 ```
 
-**Success response:**
+**Response:**
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 3,
+  "id": 2,
   "result": {
-    "content": [{ "type": "text", "text": "fn main() { ... }" }],
-    "isError": false
+    "content": [
+      {
+        "type": "text",
+        "text": "fn main() {\n    println!(\"Hello, world!\");\n}"
+      }
+    ]
   }
 }
 ```
 
-**Error response (tool not found):**
+---
+
+## The 24 Tools
+
+### File Operations
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents |
+| `write_file` | Write content to file |
+| `edit_file` | Apply search/replace edits |
+| `delete_file` | Remove a file |
+| `apply_patch` | Apply unified diff |
+
+### Discovery
+
+| Tool | Description |
+|------|-------------|
+| `list_files` | List directory contents |
+| `grep_files` | Search for patterns |
+| `find_file` | Find files by name |
+| `file_stats` | Get file metadata |
+
+### Git
+
+| Tool | Description |
+|------|-------------|
+| `git_status` | Repository status |
+| `git_log` | Commit history |
+| `git_diff` | Show changes |
+| `git_blame` | Line-by-line authorship |
+| `git_branch` | List/manage branches |
+| `git_commit` | Create commit |
+
+### Terminal
+
+| Tool | Description |
+|------|-------------|
+| `run_terminal` | Execute shell command |
+
+### Web
+
+| Tool | Description |
+|------|-------------|
+| `web_search` | Search the web |
+| `fetch_page` | Retrieve web page |
+
+### Code
+
+| Tool | Description |
+|------|-------------|
+| `search_symbols` | Find code symbols |
+| `document_outline` | Extract file structure |
+
+### Lore
+
+| Tool | Description |
+|------|-------------|
+| `lore_write` | Store project knowledge |
+| `lore_read` | Retrieve project knowledge |
+
+### Session
+
+| Tool | Description |
+|------|-------------|
+| `share_session` | Share to another interface |
+
+---
+
+## Tool Schema Reference
+
+### read_file
+
+```json
+{
+  "name": "read_file",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "path": {"type": "string", "description": "File path"},
+      "encoding": {"type": "string", "default": "utf-8"},
+      "line_start": {"type": "integer"},
+      "line_end": {"type": "integer"}
+    },
+    "required": ["path"]
+  }
+}
+```
+
+### write_file
+
+```json
+{
+  "name": "write_file",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "path": {"type": "string"},
+      "content": {"type": "string"}
+    },
+    "required": ["path", "content"]
+  }
+}
+```
+
+### run_terminal
+
+```json
+{
+  "name": "run_terminal",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "command": {"type": "string"},
+      "working_dir": {"type": "string"},
+      "timeout": {"type": "integer", "default": 30}
+    },
+    "required": ["command"]
+  }
+}
+```
+
+### git_diff
+
+```json
+{
+  "name": "git_diff",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "path": {"type": "string"},
+      "staged": {"type": "boolean"},
+      "commit": {"type": "string"},
+      "file": {"type": "string"}
+    }
+  }
+}
+```
+
+---
+
+## Error Responses
+
+### Ollama Format
+
+```json
+{
+  "error": "model not found"
+}
+```
+
+### OpenAI Format
+
+```json
+{
+  "error": {
+    "message": "Invalid API key provided",
+    "type": "invalid_request_error",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+### MCP Format
+
 ```json
 {
   "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "content": [{ "type": "text", "text": "Error: unknown tool: xyz" }],
-    "isError": true
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Invalid params",
+    "data": {"path": "required field missing"}
   }
 }
 ```
 
-### Dual transport
+### Error Codes
 
-The same `dispatch_mcp()` function handles both HTTP (`/mcp`) and stdio (`mithril mcp-stdio`):
+| Code | Meaning |
+|------|---------|
+| 400 | Bad request |
+| 401 | Unauthorized |
+| 404 | Not found |
+| 429 | Rate limited |
+| 500 | Internal error |
 
-```rust
-// HTTP handler
-pub async fn handle_mcp(State(state): State<AppState>, body: String) -> String {
-    dispatch_mcp(&body, &state.tool_registry, ...)
-}
+---
 
-// Stdio handler (mcp_stdio.rs)
-for line in stdin.lines() {
-    let response = dispatch_mcp(&line?, &registry, ...);
-    println!("{response}");
-}
+## CORS Configuration
+
+Enable CORS for web clients:
+
+```bash
+mithril serve --cors
 ```
+
+Or in config:
+
+```yaml
+server:
+  cors:
+    enabled: true
+    origins:
+      - "http://localhost:3000"
+      - "https://your-app.com"
+```
+
+---
+
+## Rate Limiting
+
+Default limits:
+
+| Endpoint | Limit |
+|----------|-------|
+| `/api/chat` | 60/min |
+| `/v1/chat/completions` | 60/min |
+| `/mcp` | 120/min |
+
+Configure:
+
+```yaml
+server:
+  rate_limit:
+    requests_per_minute: 120
+    burst: 10
+```
+
+---
+
+## Authentication
+
+Optional API key authentication:
+
+```yaml
+server:
+  auth:
+    enabled: true
+    api_keys:
+      - name: "my-app"
+        key: "mithril_sk_..."
+```
+
+Usage:
+```bash
+curl -H "Authorization: Bearer mithril_sk_..." http://localhost:16180/api/chat
+```
+
+---
+
+> *"All we have to decide is what to do with the time that is given us."*

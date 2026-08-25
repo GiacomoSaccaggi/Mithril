@@ -1,217 +1,391 @@
-# Security Guide
+# The Defenses of the Realm
 
-This page documents all security mechanisms in Mithril, how to configure them, and what protection they provide.
+> *"You cannot pass! I am a servant of the Secret Fire, wielder of the flame of Anor. The dark fire will not avail you, flame of Udûn!"* — Gandalf
 
----
-
-## Threat Model
-
-Mithril is designed for **single-user local deployment**. The primary threats are:
-
-1. **Local file access** — other users on the same machine reading config/session files
-2. **Network access** — unauthorized clients hitting the HTTP API on the local network
-3. **Prompt injection** — LLM-controlled tools executing dangerous commands
-4. **Credential theft** — API keys extracted from config files
+Mithril implements multiple layers of security to protect your system while allowing productive AI-assisted development.
 
 ---
 
-## Credential Encryption
+## Defense Overview
 
-All API keys (Gemini, OpenAI, Anthropic, Telegram) are encrypted before storage.
-
-### Format
-
-```
-base64( nonce[12] || salt[16] || AES-256-GCM(plaintext) )
-```
-
-### Key derivation
-
-Argon2id (m=65536 KB, t=3, p=1) with password = `"mithril-v2-{username}-{homedir}"`.
-
-If `key_password` is configured, it is mixed into the password for much higher entropy:
-
-```bash
-mithril config set key_password "my-strong-secret"
-```
-
-### Secrets file
-
-`key_password` and `api_token` are stored in `~/.mithril/secrets` — a **separate file** from `config.yaml`, written with `0600` permissions (owner read/write only). They are never serialized into `config.yaml`.
-
-```
-~/.mithril/
-├── config.yaml        (0600) — settings + encrypted credentials
-├── secrets            (0600) — key_password, api_token (never in config.yaml)
-└── sessions/          (dir)  — conversation history, each file 0600
-```
-
-### Key rotation
-
-When you change `key_password`, all existing credentials are automatically re-encrypted:
-
-```bash
-mithril config set key_password "new-secret"
-# Output: ✓ Migrated 3 credential(s) to new key.
-```
-
-### Legacy credentials (v1)
-
-Credentials encrypted with the old weak KDF (no Argon2) are auto-detected and decrypted correctly. They are re-encrypted with the new format on the next `mithril config set`.
+| Defense | Protects Against |
+|---------|------------------|
+| **Terminal Sanctuary** | Dangerous shell commands |
+| **Path Traversal Guard** | Filesystem escape attempts |
+| **Python Bypass Prevention** | Script-based attacks |
+| **Argon2id Vaults** | Credential theft |
+| **Retry Backoff** | Provider abuse and rate limits |
+| **Mode Separation** | Unintended modifications |
 
 ---
 
-## API Token Authentication
+## The Terminal Sanctuary
 
-The HTTP server can require a bearer token for all inference and MCP routes.
+> *"There are older and fouler things than Orcs in the deep places of the world."*
 
-```bash
-# Configure
-mithril config set api_token "my-secret-token"
+The Terminal Sanctuary blocks dangerous commands that could harm your system.
 
-# Clients must send:
-# Authorization: Bearer my-secret-token
+### Blocked Commands
+
+| Category | Commands |
+|----------|----------|
+| **System Destruction** | `rm -rf /`, `mkfs`, `dd if=/dev/zero` |
+| **Privilege Escalation** | `sudo`, `su`, `chmod 777`, `chown root` |
+| **Network Attacks** | `nc -e`, `bash -i >& /dev/tcp`, reverse shells |
+| **Process Control** | `kill -9 1`, `killall`, system process termination |
+| **Boot/Firmware** | `shutdown`, `reboot`, `halt`, BIOS modifications |
+
+### Blocked Patterns
+
+The sanctuary uses pattern matching to detect:
+
+```rust
+const BLOCKED_PATTERNS: &[&str] = &[
+    r"rm\s+(-[rf]+\s+)*[/~]",           // Dangerous rm
+    r">\s*/dev/sd",                      // Disk writes
+    r"mkfs\.",                           // Filesystem creation
+    r"dd\s+.*if=/dev/zero",              // Disk wiping
+    r":\(\)\s*\{\s*:\|:\s*&\s*\};:",     // Fork bombs
+    r"chmod\s+(-R\s+)?777\s+/",          // Dangerous permissions
+    r"/dev/tcp/",                        // Reverse shells
+    r"eval\s*\$\(",                      // Command injection
+];
 ```
 
-Routes that require auth when `api_token` is set:
+### Allowed Alternatives
 
-| Route | Auth required? |
-|-------|---------------|
-| `POST /api/chat` | ✅ |
-| `POST /api/generate` | ✅ |
-| `POST /api/pull` | ✅ |
-| `POST /v1/chat/completions` | ✅ |
-| `POST /mcp` | ✅ |
-| `GET /health` | ❌ (always public) |
-| `GET /api/tags` | ❌ (always public) |
-| `GET /api/version` | ❌ (always public) |
+| Blocked | Safe Alternative |
+|---------|------------------|
+| `rm -rf directory/` | `rm -r directory/` (prompts) |
+| `sudo command` | Run mithril as needed user |
+| `chmod 777` | `chmod 755` or more restrictive |
 
-Token comparison uses `subtle::ConstantTimeEq` to prevent timing attacks.
+### Sanctuary Bypass
+
+For legitimate needs, the sanctuary can be disabled per-session:
+
+```bash
+mithril chat --no-sanctuary  # Requires explicit flag
+```
+
+This flag is intentionally verbose and not persisted.
 
 ---
 
-## MCP Stdio Authentication
+## Path Traversal Guard
 
-The `mcp-stdio` transport is used by Claude Desktop and Junie. Auth options:
+> *"Short cuts make long delays."*
 
-### Option 1 — Environment variable
+All file operations are validated to prevent escaping the allowed workspace.
+
+### Validation Rules
+
+1. **Resolve Symlinks** — All paths are canonicalized
+2. **Check Ancestry** — Target must be under allowed roots
+3. **Reject Escapes** — `../` sequences that escape are blocked
+4. **Deny Absolutes** — Absolute paths outside workspace rejected
+
+### Implementation
+
+```rust
+fn validate_path(path: &Path, workspace: &Path) -> Result<PathBuf> {
+    let canonical = path.canonicalize()?;
+    let workspace_canonical = workspace.canonicalize()?;
+    
+    if !canonical.starts_with(&workspace_canonical) {
+        return Err(SecurityError::PathTraversal {
+            attempted: path.to_path_buf(),
+            workspace: workspace.to_path_buf(),
+        });
+    }
+    
+    Ok(canonical)
+}
+```
+
+### Protected Paths
+
+These paths are never accessible regardless of configuration:
+
+| Path | Reason |
+|------|--------|
+| `/etc/passwd`, `/etc/shadow` | System credentials |
+| `~/.ssh/` | SSH keys |
+| `~/.gnupg/` | GPG keys |
+| `~/.aws/credentials` | Cloud credentials |
+| `/dev/*` | Device files |
+| `/proc/*`, `/sys/*` | Kernel interfaces |
+
+### Allowed Roots
+
+By default, operations are restricted to:
+
+1. Current working directory and below
+2. `~/.mithril/` (configuration)
+3. Explicitly configured additional paths
+
+Configure additional roots in `~/.mithril/config.yaml`:
+
+```yaml
+security:
+  allowed_paths:
+    - /home/user/projects
+    - /tmp/mithril-work
+```
+
+---
+
+## Python Bypass Prevention
+
+> *"Do not meddle in the affairs of wizards, for they are subtle and quick to anger."*
+
+Agents cannot use Python or other scripting languages to bypass security controls.
+
+### Blocked Script Invocations
+
+| Pattern | Description |
+|---------|-------------|
+| `python -c "..."` | Inline Python code |
+| `python script.py` | Script execution |
+| `perl -e "..."` | Inline Perl |
+| `ruby -e "..."` | Inline Ruby |
+| `node -e "..."` | Inline JavaScript |
+| `bash -c "..."` | Inline bash |
+
+### Detection Method
+
+The terminal operator scans commands for:
+
+1. **Interpreter Names** — python, python3, perl, ruby, node, bash
+2. **Inline Flags** — `-c`, `-e`, `--command`
+3. **Script Extensions** — `.py`, `.pl`, `.rb`, `.js`, `.sh`
+4. **Encoding Tricks** — base64, hex encoding in arguments
+
+### Example Blocks
 
 ```bash
-export MITHRIL_API_TOKEN="my-secret-token"
-mithril mcp-stdio
+# All of these are blocked:
+python -c "import os; os.remove('/')"
+bash -c "rm -rf ~"
+perl -e 'system("dangerous")'
+echo "cm0gLXJmIH4=" | base64 -d | bash
 ```
 
-### Option 2 — JSON-RPC auth message
+---
 
-Send as first message before any tool calls:
+## The Argon2id Vaults
 
-```json
-{"jsonrpc":"2.0","method":"mithril/auth","params":{"token":"my-secret-token"},"id":0}
+> *"Keep it secret. Keep it safe."*
+
+API keys and credentials are encrypted at rest using industry-standard cryptography.
+
+### Encryption Stack
+
+| Layer | Technology | Parameters |
+|-------|------------|------------|
+| **KDF** | Argon2id | m=64MB, t=3, p=4 |
+| **Cipher** | AES-256-GCM | 256-bit key, 96-bit nonce |
+| **Storage** | JSON + base64 | `~/.mithril/credentials.enc` |
+
+### Key Derivation
+
+```rust
+let config = argon2::Config {
+    variant: argon2::Variant::Argon2id,
+    version: argon2::Version::Version13,
+    mem_cost: 65536,      // 64 MB
+    time_cost: 3,         // 3 iterations
+    lanes: 4,             // Parallelism
+    secret: &[],
+    ad: &[],
+    hash_length: 32,      // 256-bit key
+};
+
+let key = argon2::hash_raw(password, &salt, &config)?;
 ```
 
-Response on success:
-```json
-{"jsonrpc":"2.0","id":0,"result":{"authenticated":true}}
-```
-
-### Claude Desktop config with auth
+### Vault Structure
 
 ```json
 {
-  "mcpServers": {
-    "mithril": {
-      "command": "/path/to/mithril",
-      "args": ["mcp-stdio"],
-      "env": {
-        "MITHRIL_API_TOKEN": "my-secret-token"
-      }
+  "version": 1,
+  "salt": "base64-encoded-salt",
+  "credentials": {
+    "gemini": {
+      "nonce": "base64-nonce",
+      "ciphertext": "base64-encrypted-key"
+    },
+    "openai": {
+      "nonce": "base64-nonce", 
+      "ciphertext": "base64-encrypted-key"
     }
   }
 }
 ```
 
----
+### Password Handling
 
-## Terminal Sandbox
+- **First Run** — Prompts for vault password, creates encrypted store
+- **Subsequent** — Password cached in memory for session
+- **Environment** — `MITHRIL_VAULT_PASSWORD` for automation (use with care)
 
-The `run_terminal` MCP tool runs shell commands. The sandbox blocks dangerous patterns before execution.
-
-### Blocked patterns
-
-| Pattern | Category |
-|---------|----------|
-| `rm -rf /`, `rm -rf ~` | Destructive deletion |
-| `sudo `, `sudo\t` | Privilege escalation |
-| `dd if=`, `mkfs` | Disk operations |
-| `:(){ :|:& };:` | Fork bomb |
-| `> /dev/sd` | Direct disk write |
-| `base64 -d`, `base64 --decode` | Decode-and-execute bypass |
-| `eval $(`, `` `base64 `` | Eval injection |
-| `perl -e`, `ruby -e`, `node -e` | Interpreter one-liners |
-| `exec /bin/sh`, `exec /bin/bash` | Shell replacement |
-| `$IFS`, `${IFS}` | IFS manipulation |
-
-The sandbox also strips common quoting obfuscation (`s'u'do` → `sudo`) before matching.
-
-### Explicit PATH
-
-Commands run with an explicit safe `PATH`:
-```
-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-```
-
-This prevents binary hijacking via `PATH` manipulation.
-
-### Disable sandbox
+### Credential Commands
 
 ```bash
-mithril config set terminal_sandbox false
+mithril config set gemini "AIza..."    # Encrypted storage
+mithril config get gemini               # Shows masked value
+mithril config list                     # Shows key names only
 ```
 
-⚠️ Disabling the sandbox allows the LLM to execute arbitrary commands.
+---
+
+## Retry with Exponential Backoff
+
+> *"Despair is only for those who see the end beyond all doubt."*
+
+Provider failures are handled gracefully with intelligent retry logic.
+
+### Retry Strategy
+
+| Attempt | Delay | Total Wait |
+|---------|-------|------------|
+| 1 | 0s | 0s |
+| 2 | 1s | 1s |
+| 3 | 2s | 3s |
+| 4 | 4s | 7s |
+| 5 | 8s | 15s |
+| Max | 30s | - |
+
+### Retryable Errors
+
+| Error Type | Retried | Notes |
+|------------|---------|-------|
+| Connection timeout | ✅ | Network issues |
+| 429 Too Many Requests | ✅ | Rate limiting |
+| 500 Internal Server Error | ✅ | Provider issues |
+| 502/503/504 | ✅ | Infrastructure |
+| 401 Unauthorized | ❌ | Bad credentials |
+| 400 Bad Request | ❌ | Invalid input |
+
+### Configuration
+
+```yaml
+# ~/.mithril/config.yaml
+providers:
+  retry:
+    max_attempts: 5
+    initial_delay_ms: 1000
+    max_delay_ms: 30000
+    multiplier: 2.0
+```
+
+### Jitter
+
+Random jitter (0-25%) is added to prevent thundering herd:
+
+```rust
+let jittered_delay = delay + (delay * random::<f64>() * 0.25);
+```
 
 ---
 
-## File Permissions
+## Mode Separation
 
-| File | Permissions | Contents |
-|------|-------------|----------|
-| `~/.mithril/config.yaml` | 0600 | Settings + encrypted credentials |
-| `~/.mithril/secrets` | 0600 | `key_password`, `api_token` |
-| `~/.mithril/sessions/*.json` | 0600 | Conversation history |
-| `.celebrimbot/shadow_log/*/manifest.json` | 0600 | File operation log |
-| `.celebrimbot/shadow_log/*/backup_files` | 0600 | File backups |
+> *"Many that live deserve death. And some that die deserve life."*
+
+Plan and Build modes provide clear separation of intent.
+
+### Plan Mode (Default)
+
+| Capability | Allowed |
+|------------|---------|
+| Read files | ✅ |
+| Search/grep | ✅ |
+| Git status/log/diff | ✅ |
+| Web search | ✅ |
+| Write files | ❌ |
+| Delete files | ❌ |
+| Git commit | ❌ |
+| Arbitrary terminal | ❌ |
+
+### Build Mode
+
+| Capability | Allowed |
+|------------|---------|
+| All Plan capabilities | ✅ |
+| Write files | ✅ |
+| Delete files | ✅ |
+| Git commit | ✅ |
+| Terminal (with sanctuary) | ✅ |
+
+### Mode Indication
+
+The TUI status bar shows current mode:
+- 📖 **PLAN** — Blue indicator
+- 🔨 **BUILD** — Orange indicator
+
+Press `Tab` to toggle.
 
 ---
 
-## Rate Limiting
+## Shadow Log Protection
 
-The HTTP server limits concurrent inference requests to prevent resource exhaustion:
+> *"The Shadow that bred them can only mock, it cannot make."*
 
-- **`/api/chat`, `/api/generate`, `/v1/chat/completions`, `/mcp`**: max 10 concurrent requests (configurable via `ConcurrencyLimitLayer`)
-- **`/health`, `/api/tags`, `/api/version`**: unlimited (no rate limit — required for health checks)
+All file modifications are logged for recovery.
 
-The MCP stdio transport does not have a concurrency limit (it processes one request at a time by design, since stdin is sequential).
+### Backup Triggers
 
----
+| Operation | Backed Up |
+|-----------|-----------|
+| `write_file` | Original file (if exists) |
+| `edit_file` | Original file |
+| `delete_file` | Deleted file |
+| `apply_patch` | All affected files |
 
-## Session Security
+### Log Structure
 
-Sessions are stored at `~/.mithril/sessions/<uuid>.json`. Each file:
-- Written with `0600` permissions
-- Contains the full conversation history
-- UUID-named (unpredictable)
+```
+~/.mithril/shadow/
+├── 2024-01-15T10-30-00/
+│   ├── manifest.json
+│   └── files/
+│       ├── src__main.rs          # Path encoded
+│       └── Cargo.toml
+```
+
+### Recovery
 
 ```bash
-# List sessions
-mithril sessions list
-
-# Delete a session
-mithril sessions delete <id>
+mithril undo                       # Restore last session
+mithril undo --list                # Show all backups
+mithril undo --session "2024-..."  # Restore specific
 ```
+
+---
+
+## Security Recommendations
+
+### For Users
+
+1. **Use Plan mode** by default for exploration
+2. **Review before Build** — understand what will change
+3. **Protect vault password** — don't commit to env files
+4. **Regular undo review** — check shadow log periodically
+
+### For Deployment
+
+1. **Run unprivileged** — never as root
+2. **Restrict paths** — configure minimal allowed_paths
+3. **Network isolation** — bind to localhost only
+4. **Audit logs** — enable debug logging for review
 
 ---
 
 ## Reporting Security Issues
 
-If you discover a security vulnerability, please open a private issue or contact the maintainer directly. Do not open public issues for security vulnerabilities.
+Report vulnerabilities privately to security@mithril.dev — do not open public issues for security concerns.
+
+---
+
+> *"All shall love me and despair!"* — Just kidding, please use security responsibly.
