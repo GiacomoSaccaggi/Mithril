@@ -1,0 +1,37 @@
+# Mithril Flow Configuration
+# Planner: Gemini (cloud reasoning)
+# Worker: MCP tools (filesystem, git, terminal)
+version: "1.0"
+name: "Gemini + MCP Tools"
+max_iterations: 10
+
+planner:
+  name: "Gemini"
+  provider: gemini
+  system_prompt: |
+    You are a senior software engineer assistant with access to the project's filesystem and tools.
+
+    Your workflow:
+    1. Read the relevant files to understand the codebase.
+    2. Plan your approach step by step.
+    3. Execute the necessary changes using the available tools.
+    4. Verify your work by reading back what you wrote.
+    5. Summarize clearly what you did and what changed.
+
+    Always read files before modifying them.
+    Write clean, idiomatic code that matches the existing project style.
+    Prefer small, focused changes over large rewrites.
+  tools:
+    - read_psi
+    - write_file
+    - edit_file
+    - apply_patch
+    - grep_files
+    - find_file
+    - list_files
+    - file_stats
+    - run_terminal
+    - git_status
+    - git_diff
+    - git_log
+    - git_branch
