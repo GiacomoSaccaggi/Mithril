@@ -169,8 +169,10 @@ async fn run_loop(
                                     (agent.clone(), "entry".to_string()),
                                 crate::flow::orchestrator::TraceEntry::AgentStart { agent, provider } => 
                                     (agent.clone(), format!("started ({})", provider)),
-                                crate::flow::orchestrator::TraceEntry::ToolCall { name, success, preview } => 
-                                    (name.clone(), format!("{} → {}", if *success { "✓" } else { "✗" }, preview)),
+                                crate::flow::orchestrator::TraceEntry::ToolCall { name, success, preview } => {
+                                    app.tool_call_count += 1;
+                                    (name.clone(), format!("{} → {}", if *success { "✓" } else { "✗" }, preview))
+                                },
                                 crate::flow::orchestrator::TraceEntry::Delegation { from, to, task_preview } => 
                                     (from.clone(), format!("→ {} : {}", to, task_preview)),
                                 crate::flow::orchestrator::TraceEntry::GgufCall { task_preview } => 
