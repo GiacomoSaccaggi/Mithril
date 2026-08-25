@@ -114,9 +114,7 @@ impl Orchestrator {
         let first_agent = self.classify_entry(user_message).await?;
         self.trace.push(TraceEntry::Entry { agent: first_agent.clone() });
 
-        if self.trace_mode != TraceMode::Silent {
-            eprintln!("  {} gguf → {}", "⚡".dimmed(), first_agent.cyan());
-        }
+        // Trace entry already pushed — callers print it
 
         // Step 2: Agent loop
         let response = self.run_agent_loop(&first_agent, user_message).await?;
@@ -171,9 +169,7 @@ impl Orchestrator {
         loop {
             // Safety: max_rounds
             if self.rounds >= self.config.max_rounds {
-                if self.trace_mode != TraceMode::Silent {
-                    eprintln!("  {} Max rounds ({}) reached", "⚠".yellow(), self.config.max_rounds);
-                }
+    
                 return Ok(format!("[Max rounds reached after {} iterations]", self.rounds));
             }
 
@@ -218,9 +214,7 @@ impl Orchestrator {
             match directive {
                 Directive::Done(response) => {
                     self.trace.push(TraceEntry::Done { agent: current_agent_name.clone() });
-                    if self.trace_mode != TraceMode::Silent {
-                        eprintln!("  {} {} → DONE", "✓".green(), current_agent_name);
-                    }
+
                     return Ok(response);
                 }
                 Directive::CallAgent { name, task } => {
@@ -243,9 +237,7 @@ impl Orchestrator {
                     if name == "gguf" {
                         // GGUF worker: execute and return result to CALLING agent
                         self.trace.push(TraceEntry::GgufCall { task_preview: task_preview.clone() });
-                        if self.trace_mode != TraceMode::Silent {
-                            eprintln!("  {} {} → gguf: {}", "⚙".dimmed(), current_agent_name, task_preview.dimmed());
-                        }
+
                         let gguf_result = self.execute_gguf(&task).await?;
                         // Feed back to same agent with gguf result as new task
                         current_task = format!("Result from gguf: {}\n\nContinue your previous task.", gguf_result);
@@ -257,9 +249,7 @@ impl Orchestrator {
                             to: name.clone(),
                             task_preview: task_preview.clone(),
                         });
-                        if self.trace_mode != TraceMode::Silent {
-                            eprintln!("  {} {} → {}: {}", "🔀".dimmed(), current_agent_name, name.cyan(), task_preview.dimmed());
-                        }
+
                         current_agent_name = name;
                         current_task = task;
                     }
@@ -267,9 +257,7 @@ impl Orchestrator {
                 Directive::None => {
                     // No NEXT tag — entire output is the final response
                     self.trace.push(TraceEntry::Done { agent: current_agent_name.clone() });
-                    if self.trace_mode != TraceMode::Silent {
-                        eprintln!("  {} {} → user (no NEXT tag)", "✓".green(), current_agent_name);
-                    }
+
                     return Ok(result);
                 }
             }
@@ -533,6 +521,8 @@ fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAg
          ## Available Agents\n\
          {}\n\n\
          ## Rules\n\
+         - Always include relevant tool output in your response. Show the actual data, not just a summary.\n\
+         - When a tool returns results the user asked for, include them verbatim in your RESPONSE.\n\
          - Use NEXT: gguf for trivial sub-tasks (saves money)\n\
          - Only call agents you actually need\n\
          - Be concise in TASK: descriptions\n\
