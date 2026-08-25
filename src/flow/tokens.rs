@@ -27,8 +27,8 @@ impl TokenUsage {
     /// Estimate tokens from text lengths (1 token ≈ 4 chars).
     pub fn estimate(input_text: &str, output_text: &str) -> Self {
         Self {
-            input: (input_text.len() as u64 + 3) / 4,
-            output: (output_text.len() as u64 + 3) / 4,
+            input: (input_text.len() as u64).div_ceil(4),
+            output: (output_text.len() as u64).div_ceil(4),
         }
     }
 
@@ -111,7 +111,7 @@ impl SessionTokens {
 
         let total = self.total();
         if sorted.len() > 1 {
-            lines.push(format!("  ─────────"));
+            lines.push("  ─────────".to_string());
             lines.push(format!("  TOTAL: {}", total.display()));
         }
 

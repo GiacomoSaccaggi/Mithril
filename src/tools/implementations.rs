@@ -764,6 +764,12 @@ fn extract_outline(content: &str, path: &str) -> String {
 // survive across sessions. Stored at .mithril/lore.md in the project root.
 
 pub struct LoreWriteTool;
+impl Default for LoreWriteTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoreWriteTool {
     pub fn new() -> Self { Self }
 }
@@ -820,6 +826,12 @@ impl Tool for LoreWriteTool {
 }
 
 pub struct LoreReadTool;
+impl Default for LoreReadTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LoreReadTool {
     pub fn new() -> Self { Self }
 }

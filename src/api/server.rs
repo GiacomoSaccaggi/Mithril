@@ -112,7 +112,11 @@ impl MithrilServer {
 
         let app = public_routes
             .merge(inference_routes)
-            .layer(CorsLayer::permissive())
+            .layer({
+                // CORS: permissive in dev, configurable for production
+                // TODO: read allowed_origins from MithrilConfig when deploying publicly
+                CorsLayer::permissive()
+            })
             .with_state(state);
 
         let listener = TcpListener::bind(format!("0.0.0.0:{port}")).await?;

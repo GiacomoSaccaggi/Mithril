@@ -125,7 +125,7 @@ fn render_chat_panel(frame: &mut Frame, app: &App, area: Rect) {
             }
             Role::System => {
                 lines.push(Line::from(Span::styled(
-                    format!("  ⚡ {}", &msg.content),
+                    format!("  ⚡ {}", msg.content),
                     theme::system_style(),
                 )));
                 lines.push(Line::from(""));

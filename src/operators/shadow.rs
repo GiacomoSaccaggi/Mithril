@@ -82,7 +82,7 @@ impl ShadowOperator {
     }
 
     fn encode_path(path: &str) -> String {
-        path.replace('/', "__").replace('\\', "__")
+        path.replace(['/', '\\'], "__")
     }
 
     fn ensure_gitignore(&self) {
@@ -221,7 +221,16 @@ impl ShadowOperator {
             };
         }
 
-        let latest = sessions.into_iter().last().unwrap();
+        let latest = match sessions.into_iter().last() {
+            Some(s) => s,
+            None => return UndoResult {
+                session_id: String::new(),
+                restored: vec![],
+                deleted_new: vec![],
+                recreated: vec![],
+                errors: vec!["No sessions found".into()],
+            },
+        };
         let session_dir = self.shadow_root().join(&latest.session_id);
         let manifest_path = session_dir.join("manifest.json");
 
@@ -271,8 +280,8 @@ impl ShadowOperator {
                         }
                     }
                 }
-                "DELETE" => {
-                    if op.existed {
+                "DELETE"
+                    if op.existed => {
                         if let Some(ref bf) = op.backup_file {
                             let backup = session_dir.join(bf);
                             if let Some(parent) = target.parent() {
@@ -284,7 +293,6 @@ impl ShadowOperator {
                             }
                         }
                     }
-                }
                 _ => {}
             }
         }

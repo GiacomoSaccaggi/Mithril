@@ -19,10 +19,41 @@ impl FileOperator {
 
     fn resolve(&self, path: &str) -> PathBuf {
         let p = Path::new(path);
-        if p.is_absolute() {
+        let resolved = if p.is_absolute() {
             p.to_path_buf()
         } else {
             self.base_path.join(p)
+        };
+
+        // Security: canonicalize and verify the path stays within base_path
+        // This prevents path traversal attacks (../../etc/passwd)
+        match resolved.canonicalize() {
+            Ok(canonical) => {
+                let base_canonical = self.base_path.canonicalize()
+                    .unwrap_or_else(|_| self.base_path.clone());
+                if canonical.starts_with(&base_canonical) {
+                    canonical
+                } else {
+                    // Path escapes base_path — return a non-existent path to trigger "not found"
+                    self.base_path.join("__access_denied__")
+                }
+            }
+            // File doesn't exist yet (write_file case) — check parent
+            Err(_) => {
+                if let Some(parent) = resolved.parent() {
+                    let parent_canonical = parent.canonicalize()
+                        .unwrap_or_else(|_| parent.to_path_buf());
+                    let base_canonical = self.base_path.canonicalize()
+                        .unwrap_or_else(|_| self.base_path.clone());
+                    if parent_canonical.starts_with(&base_canonical) {
+                        resolved
+                    } else {
+                        self.base_path.join("__access_denied__")
+                    }
+                } else {
+                    resolved
+                }
+            }
         }
     }
 

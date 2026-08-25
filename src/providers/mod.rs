@@ -229,6 +229,40 @@ pub fn available_providers() -> Vec<&'static str> {
     vec!["local", "gemini", "openai", "anthropic", "groq"]
 }
 
+
+/// Retry an async operation with exponential backoff.
+/// Retries on transient errors (429, 503, 500, connection errors).
+pub(crate) async fn retry_with_backoff<F, Fut, T>(max_retries: u32, mut f: F) -> Result<T>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut attempt = 0;
+    loop {
+        match f().await {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                attempt += 1;
+                let err_str = e.to_string();
+                let is_retryable = err_str.contains("429")
+                    || err_str.contains("503")
+                    || err_str.contains("500")
+                    || err_str.contains("rate limit")
+                    || err_str.contains("connection")
+                    || err_str.contains("timeout");
+
+                if !is_retryable || attempt >= max_retries {
+                    return Err(e);
+                }
+
+                let delay = std::time::Duration::from_millis(500 * 2u64.pow(attempt - 1));
+                tracing::warn!("Provider error (attempt {}/{}): {}. Retrying in {:?}", attempt, max_retries, err_str, delay);
+                tokio::time::sleep(delay).await;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

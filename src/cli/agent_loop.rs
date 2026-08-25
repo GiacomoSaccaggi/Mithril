@@ -116,7 +116,9 @@ pub async fn run_agentic_loop(
             );
         }
 
-        let result = provider.chat_with_tools(messages, tool_defs).await?;
+        let result = crate::providers::retry_with_backoff(3, || async {
+            provider.chat_with_tools(messages, tool_defs).await
+        }).await?;
 
         match result {
             ToolCallResult::Text(response) => {
@@ -157,8 +159,8 @@ pub async fn run_agentic_loop(
                     }
 
                     // Permission gate for dangerous tools (interactive mode only)
-                    if trace_mode == TraceMode::Inline && needs_permission(&call.name) {
-                        if !ask_permission(&call.name, &call.arguments) {
+                    if trace_mode == TraceMode::Inline && needs_permission(&call.name)
+                        && !ask_permission(&call.name, &call.arguments) {
                             let denied = crate::tools::registry::ToolResult::err(
                                 format!("⛔ Permission denied by user for '{}'", call.name)
                             );
@@ -174,7 +176,6 @@ pub async fn run_agentic_loop(
                             });
                             continue;
                         }
-                    }
                     let tool_result = execute_tool(registry, call);
 
                     // Trace output
@@ -225,8 +226,7 @@ pub async fn run_agentic_loop(
                     if same_tool && all_failed && same_err {
                         if trace_mode != TraceMode::Silent {
                             eprintln!(
-                                "  {} Balrog detected! Agent stuck in doom loop (3× {}). Breaking free.",
-                                "🔥",
+                                "  🔥 Balrog detected! Agent stuck in doom loop (3× {}). Breaking free.",
                                 tail[0].name
                             );
                         }
@@ -242,7 +242,7 @@ pub async fn run_agentic_loop(
                 }
 
                 // Feed results back as a system message
-                messages.push(ChatMessage::system(&format!(
+                messages.push(ChatMessage::system(format!(
                     "[Tool execution results]\n\n{}",
                     results_text.join("\n\n---\n\n")
                 )));

@@ -309,7 +309,7 @@ impl Orchestrator {
 
         let mut messages = vec![ChatMessage::system(&system)];
         if !recent.is_empty() {
-            messages.push(ChatMessage::system(&format!("Recent context:\n{}", recent.join("\n"))));
+            messages.push(ChatMessage::system(format!("Recent context:\n{}", recent.join("\n"))));
         }
         messages.push(ChatMessage::user(task));
 

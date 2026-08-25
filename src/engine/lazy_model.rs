@@ -151,14 +151,15 @@ impl LazyModelManager {
                 .ok_or_else(|| anyhow!("Backend not initialized"))?;
 
             let ctx_params = LlamaContextParams::default()
-                .with_n_ctx(NonZeroU32::new(n_ctx));
+                .with_n_ctx(NonZeroU32::new(n_ctx))
+                .with_n_batch(n_ctx);
             let mut ctx = model.new_context(backend, ctx_params)?;
 
             let tokens = model.str_to_token(&prompt, AddBos::Always)?;
             let n_prompt = tokens.len();
 
             // Decode the initial prompt using add_sequence
-            let mut batch = LlamaBatch::new(n_prompt, 1);
+            let mut batch = LlamaBatch::new(n_ctx as usize, 1);
             batch.add_sequence(&tokens, 0, false)?;
             ctx.decode(&mut batch)?;
 
@@ -270,7 +271,7 @@ impl LazyModelManager {
                 let tokens = model.str_to_token(&prompt, AddBos::Always)?;
                 let n_prompt = tokens.len();
 
-                let mut batch = LlamaBatch::new(n_prompt, 1);
+                let mut batch = LlamaBatch::new(n_ctx as usize, 1);
                 batch.add_sequence(&tokens, 0, false)?;
                 ctx.decode(&mut batch)?;
 

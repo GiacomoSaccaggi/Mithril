@@ -51,7 +51,7 @@ pub async fn run(
         if steering.is_empty() {
             session.push(ChatMessage::system(default_system));
         } else {
-            session.push(ChatMessage::system(&format!("{}
+            session.push(ChatMessage::system(format!("{}
 
 {}", default_system, steering)));
         }

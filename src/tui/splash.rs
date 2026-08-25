@@ -39,7 +39,7 @@ fn fullscreen_frame(area: Rect, art_lines: &[&str], fg: Color, bright: Color, fi
     let v_offset = (area.height as usize).saturating_sub(art_height) / 2;
     let width = area.width as usize;
 
-    let fill_line: String = std::iter::repeat(fill).take(width).collect();
+    let fill_line: String = std::iter::repeat_n(fill, width).collect();
     let style = Style::default().fg(fg);
     let bright_style = Style::default().fg(bright);
     let fill_style = Style::default().fg(Color::Rgb(30, 30, 40));
