@@ -51,6 +51,9 @@ const BLOCKED_PATTERNS: &[&str] = &[
     "perl -e",
     "ruby -e",
     "node -e",
+    "python -c",
+    "python3 -c",
+    "python2 -c",
 ];
 
 /// Validate a command against the sandbox denylist.

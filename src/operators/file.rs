@@ -19,46 +19,44 @@ impl FileOperator {
 
     fn resolve(&self, path: &str) -> PathBuf {
         let p = Path::new(path);
-        let resolved = if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            self.base_path.join(p)
-        };
 
-        // Security: canonicalize and verify the path stays within base_path
-        // This prevents path traversal attacks (../../etc/passwd)
-        match resolved.canonicalize() {
-            Ok(canonical) => {
-                let base_canonical = self.base_path.canonicalize()
-                    .unwrap_or_else(|_| self.base_path.clone());
+        // Security: block absolute paths outside project
+        if p.is_absolute() {
+            let base_canonical = self.base_path.canonicalize()
+                .unwrap_or_else(|_| self.base_path.clone());
+            if let Ok(canonical) = p.canonicalize() {
                 if canonical.starts_with(&base_canonical) {
-                    canonical
-                } else {
-                    // Path escapes base_path — return a non-existent path to trigger "not found"
-                    self.base_path.join("__access_denied__")
+                    return canonical;
                 }
             }
-            // File doesn't exist yet (write_file case) — check parent
-            Err(_) => {
-                if let Some(parent) = resolved.parent() {
-                    let parent_canonical = parent.canonicalize()
-                        .unwrap_or_else(|_| parent.to_path_buf());
-                    let base_canonical = self.base_path.canonicalize()
-                        .unwrap_or_else(|_| self.base_path.clone());
-                    if parent_canonical.starts_with(&base_canonical) {
-                        resolved
-                    } else {
-                        self.base_path.join("__access_denied__")
-                    }
-                } else {
-                    resolved
-                }
+            // Absolute path outside project or doesn't exist
+            return self.base_path.join("__access_denied__");
+        }
+
+        // Security: block relative paths with .. components that escape base
+        let normalized = path.replace("\\", "/");
+        let components: Vec<&str> = normalized.split('/').collect();
+        let mut depth: i32 = 0;
+        for c in &components {
+            if *c == ".." {
+                depth -= 1;
+            } else if !c.is_empty() && *c != "." {
+                depth += 1;
+            }
+            if depth < 0 {
+                return self.base_path.join("__access_denied__");
             }
         }
+
+        // Safe relative path — join with base
+        self.base_path.join(p)
     }
 
     pub fn read_file(&self, path: &str) -> String {
         let full = self.resolve(path);
+        if full.ends_with("__access_denied__") {
+            return format!("Error: Access denied (path outside project): {path}");
+        }
         match fs::read_to_string(&full) {
             Ok(content) => content,
             Err(_) => format!("Error: File not found: {path}"),
@@ -67,6 +65,11 @@ impl FileOperator {
 
     pub fn write_file(&self, path: &str, content: &str) -> bool {
         let full = self.resolve(path);
+        // Security: reject if resolve() returned the access-denied sentinel
+        if full.ends_with("__access_denied__") {
+            tracing::warn!("write_file: path traversal blocked for: {path}");
+            return false;
+        }
         if let Some(parent) = full.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
                 tracing::warn!("write_file: failed to create dirs: {e}");
@@ -78,6 +81,10 @@ impl FileOperator {
 
     pub fn delete_file(&self, path: &str) -> bool {
         let full = self.resolve(path);
+        if full.ends_with("__access_denied__") {
+            tracing::warn!("delete_file: path traversal blocked for: {path}");
+            return false;
+        }
         fs::remove_file(full).is_ok()
     }
 
