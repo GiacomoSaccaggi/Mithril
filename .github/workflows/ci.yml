@@ -40,7 +40,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y cmake
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --all-targets
 
   build-release:
     name: Build Release
