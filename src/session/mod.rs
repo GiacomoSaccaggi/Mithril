@@ -53,6 +53,8 @@ struct SessionData {
     pub messages: Vec<ChatMessage>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 /// Shared session — clone-cheap because it's all behind Arc.
@@ -60,6 +62,8 @@ struct SessionData {
 pub struct SharedSession {
     pub id: String,
     pub provider_name: String,
+    /// Short auto-generated title for this session.
+    pub title: Arc<Mutex<Option<String>>>,
     /// Conversation history — shared between all frontends.
     pub messages: Arc<Mutex<Vec<ChatMessage>>>,
     /// Which frontend is currently active.
@@ -76,6 +80,7 @@ impl SharedSession {
         Self {
             id: Uuid::new_v4().to_string(),
             provider_name: provider_name.to_string(),
+            title: Arc::new(Mutex::new(None)),
             messages: Arc::new(Mutex::new(Vec::new())),
             active_frontend: Arc::new(AtomicU8::new(FRONTEND_TERMINAL)),
             created_at: now,
@@ -93,6 +98,7 @@ impl SharedSession {
         Ok(Self {
             id: data.id,
             provider_name: data.provider_name,
+            title: Arc::new(Mutex::new(data.title)),
             messages: Arc::new(Mutex::new(data.messages)),
             active_frontend: Arc::new(AtomicU8::new(FRONTEND_TERMINAL)),
             created_at: data.created_at,
@@ -113,6 +119,7 @@ impl SharedSession {
             messages: snapshot,
             created_at: self.created_at,
             updated_at: now,
+            title: self.title.lock().clone(),
         };
         let content = serde_json::to_string_pretty(&data)?;
         write_restricted(&session_path(&self.id), content.as_bytes())?;
@@ -123,6 +130,16 @@ impl SharedSession {
 
     /// Add a message to history and auto-save.
     /// Logs a warning if save fails (disk full, permissions error, etc.).
+    /// Set a title for this session (auto-generated from first message).
+    pub fn set_title(&self, title: &str) {
+        *self.title.lock() = Some(title.to_string());
+    }
+
+    /// Get the current title.
+    pub fn get_title(&self) -> Option<String> {
+        self.title.lock().clone()
+    }
+
     pub fn push(&self, msg: ChatMessage) {
         self.messages.lock().push(msg);
         if let Err(e) = self.save() {
@@ -163,6 +180,7 @@ impl SharedSession {
             messages: msgs.to_vec(),
             created_at: self.created_at,
             updated_at: now,
+            title: self.title.lock().clone(),
         };
         let content = serde_json::to_string_pretty(&data)?;
         write_restricted(&session_path(&self.id), content.as_bytes())?;

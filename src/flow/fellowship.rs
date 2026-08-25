@@ -153,6 +153,101 @@ impl FellowshipConfig {
     }
 
     /// Get an agent by name.
+    /// Load markdown agent definitions from .mithril/agents/*.md
+    /// Each .md file with YAML frontmatter becomes an agent.
+    pub fn load_markdown_agents(&mut self) {
+        let agents_dir = std::path::Path::new(".mithril/agents");
+        if !agents_dir.exists() {
+            return;
+        }
+        let entries = match std::fs::read_dir(agents_dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("md") {
+                continue;
+            }
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            if let Some(agent) = Self::parse_markdown_agent(&content, &path) {
+                // Don't override existing agents
+                if !self.agents.iter().any(|a| a.name == agent.name) {
+                    self.agents.push(agent);
+                }
+            }
+        }
+    }
+
+    /// Parse a markdown agent file with YAML frontmatter.
+    /// Format:
+    /// ```text
+    /// ---
+    /// description: What this agent does
+    /// model: gemini-3.6-flash
+    /// provider: gemini
+    /// mode: subagent
+    /// ---
+    /// System prompt content here
+    /// ```
+    fn parse_markdown_agent(content: &str, path: &std::path::Path) -> Option<FellowshipAgent> {
+        if !content.starts_with("---") {
+            return None;
+        }
+        let parts: Vec<&str> = content.splitn(3, "---").collect();
+        if parts.len() < 3 {
+            return None;
+        }
+        let frontmatter = parts[1].trim();
+        let prompt = parts[2].trim();
+
+        // Parse frontmatter as simple key-value
+        let mut description = String::new();
+        let mut provider = None;
+        let mut model = None;
+        let mut tools: Option<Vec<String>> = None;
+
+        for line in frontmatter.lines() {
+            let line = line.trim();
+            if let Some((key, value)) = line.split_once(':') {
+                let key = key.trim();
+                let value = value.trim().trim_matches('"').trim_matches('\'');
+                match key {
+                    "description" => description = value.to_string(),
+                    "provider" => provider = Some(value.to_string()),
+                    "model" => model = Some(value.to_string()),
+                    "tools" => {
+                        if value == "*" {
+                            tools = Some(vec!["*".to_string()]);
+                        } else {
+                            tools = Some(value.split(',').map(|s| s.trim().to_string()).collect());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Agent name from filename
+        let name = path.file_stem()?.to_str()?.to_string();
+
+        Some(FellowshipAgent {
+            name,
+            provider,
+            model,
+            agent_type: AgentType::Provider,
+            binary: None,
+            args: None,
+            role: if prompt.is_empty() { description.clone() } else { prompt.to_string() },
+            when: Some(description),
+            can_call: vec![],
+            tools,
+        })
+    }
+
     pub fn get_agent(&self, name: &str) -> Option<&FellowshipAgent> {
         self.agents.iter().find(|a| a.name == name)
     }

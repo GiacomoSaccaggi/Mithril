@@ -202,6 +202,18 @@ pub async fn run(fellowship_name: Option<&str>, session_id: Option<&str>) -> Res
                         println!();
                         
                         session.push(ChatMessage::assistant(&result.response));
+
+                        // Auto-generate session title from first user message
+                        if session.get_title().is_none() {
+                            let title = input.chars().take(50).collect::<String>();
+                            let title = if title.len() >= 50 {
+                                format!("{}...", &title[..47])
+                            } else {
+                                title
+                            };
+                            session.set_title(&title);
+                            let _ = session.save();
+                        }
                     }
                     Err(e) => {
                         eprintln!("  \x1b[31mError:\x1b[0m {}", e);

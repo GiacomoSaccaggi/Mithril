@@ -90,7 +90,10 @@ pub struct Orchestrator {
 }
 
 impl Orchestrator {
-    pub fn new(config: FellowshipConfig, mithril_config: MithrilConfig, trace_mode: TraceMode) -> Self {
+    pub fn new(mut config: FellowshipConfig, mithril_config: MithrilConfig, trace_mode: TraceMode) -> Self {
+        // Load markdown agent definitions from .mithril/agents/*.md
+        config.load_markdown_agents();
+
         Self {
             config,
             mithril_config,
@@ -110,8 +113,12 @@ impl Orchestrator {
         self.agents_involved.clear();
         self.context_history.clear();
 
-        // Step 1: GGUF classifies entry
-        let first_agent = self.classify_entry(user_message).await?;
+        // Step 1: Check for @agent mention (skip GGUF classification)
+        let first_agent = if let Some(mentioned) = self.extract_agent_mention(user_message) {
+            mentioned
+        } else {
+            self.classify_entry(user_message).await?
+        };
         self.trace.push(TraceEntry::Entry { agent: first_agent.clone() });
 
         // Trace entry already pushed — callers print it
@@ -160,6 +167,23 @@ impl Orchestrator {
             .map(|a| a.name.clone());
 
         Ok(matched.unwrap_or_else(|| self.config.agents[0].name.clone()))
+    }
+
+    /// Check if user message starts with @agentname and extract the agent name.
+    /// Returns Some(agent_name) if a valid agent is mentioned, None otherwise.
+    fn extract_agent_mention(&self, message: &str) -> Option<String> {
+        let trimmed = message.trim();
+        if !trimmed.starts_with('@') {
+            return None;
+        }
+        // Extract the word after @
+        let mention = trimmed[1..].split_whitespace().next()?;
+        let mention_lower = mention.to_lowercase();
+
+        // Check if it matches any configured agent
+        self.config.agents.iter()
+            .find(|a| a.name.to_lowercase() == mention_lower)
+            .map(|a| a.name.clone())
     }
 
     async fn run_agent_loop(&mut self, first_agent: &str, initial_task: &str) -> Result<String> {
