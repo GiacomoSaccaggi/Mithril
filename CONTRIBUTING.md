@@ -1,482 +1,229 @@
 # Contributing to Mithril
 
-This guide covers how to add new providers, tools, and models to Mithril.
+> *"I will take the Ring, though I do not know the way."* — Frodo
+
+Welcome, traveler. You have found the forges beneath the Misty Mountains where Mithril is wrought. Whether you are a Dwarf of great skill, an Elf of ancient wisdom, or a Hobbit of unexpected courage — all are welcome to contribute.
 
 ---
 
-## Adding a new provider
+## The Fellowship's Code of Conduct
 
-A provider is a cloud (or local) LLM backend. It implements the `ChatProvider` trait.
+> *"Even the smallest person can change the course of the future."* — Galadriel
 
-### Step 1 — Create the provider file
+- Be excellent to each other. We are a Fellowship, not a band of Orcs.
+- Review code as Gandalf would: firmly but kindly. "You shall not pass" is reserved for actual bugs.
+- Credit others. Stolen code is the way of Sauron.
 
-Create `src/providers/myservice.rs`:
+---
+
+## Forging New Mithril (How to Contribute)
+
+### 1. The Quest Begins (Setup)
+
+```bash
+# Clone the mines of Moria
+git clone https://github.com/GiacomoSaccaggi/mithril.git
+cd mithril
+
+# Install the tools of the Dwarves
+brew install cmake  # macOS
+cargo build --release
+
+# Light your torch (run tests)
+cargo test
+```
+
+### 2. Choose Your Quest (Issues)
+
+Before you forge, find or create an issue:
+
+- 🗡️ **Bug** — "A Balrog of Morgoth! What did you say?" (something crashed)
+- 🛡️ **Enhancement** — "Speak, friend, and enter" (new feature proposal)
+- 📜 **Documentation** — "The tale grew in the telling" (docs improvement)
+
+### 3. Create a Branch (Leave the Shire)
+
+```bash
+# Branch naming convention — name it after your quest
+git checkout -b feat/palantir-improvements    # new feature
+git checkout -b fix/shadow-log-corruption     # bug fix
+git checkout -b docs/fellowship-guide         # documentation
+```
+
+> *"The road goes ever on and on, down from the door where it began."*
+
+Use prefixes: `feat/`, `fix/`, `docs/`, `refactor/`, `test/`
+
+### 4. Write Your Code (Forge the Ring)
+
+**Style of the Dwarven Smiths:**
+
+- Write the minimal code needed. Dwarves waste no metal.
+- Name things clearly. `lazy_model_manager` not `lmm`. We are not speaking Black Speech.
+- Comments are for *why*, not *what*. The code speaks for itself, like Treebeard — slowly but clearly.
+- Match existing patterns. Consistency is the Mithril-coat of maintainability.
+
+**The Three Laws of Mithril Code:**
+
+1. **It shall compile.** `cargo check` must pass. No exceptions. Not even for Wizards.
+2. **It shall not leak.** No hardcoded paths, no secrets, no personal data in commits.
+3. **It shall be tested.** If you add a function, add a test. Untested code is like going to Mordor without Sam.
+
+### 5. Commit Messages (Write in the Runes)
+
+Format: `type: short description`
+
+```
+feat: add Rohan provider for horse-speed inference
+fix: shadow log no longer corrupts on concurrent writes
+docs: update fellowship configuration guide
+refactor: simplify orchestrator directive parsing
+test: add unit tests for BM25 scoring
+```
+
+Keep it under 70 characters. Gandalf is concise when it matters.
+
+### 6. Open a Pull Request (Council of Elrond)
+
+```bash
+git push -u origin feat/your-quest-name
+gh pr create
+```
+
+Your PR description should answer:
+- **What** does this change?
+- **Why** is it needed?
+- **How** can it be tested?
+
+> *"Nine companions. So be it. You shall be the Fellowship of the Ring."*
+
+---
+
+## The Crafts (What You Can Add)
+
+### Adding a New Provider (Summoning a New Wizard)
+
+Each provider lives in `src/providers/` and implements `ChatProvider`:
 
 ```rust
-use super::{ChatMessage, ChatProvider, StreamChunk, ToolCallResult, ToolDefinition};
-use anyhow::Result;
-use async_trait::async_trait;
-use futures::StreamExt;
-
-pub struct MyServiceProvider {
-    api_key: String,
-    model: String,
-    client: reqwest::Client,
-}
-
-impl MyServiceProvider {
-    pub fn new(api_key: String, model: &str) -> Self {
-        Self {
-            api_key,
-            model: model.to_string(),
-            client: reqwest::Client::new(),
-        }
-    }
-}
+// src/providers/gandalf.rs
+pub struct GandalfProvider { /* ... */ }
 
 #[async_trait]
-impl ChatProvider for MyServiceProvider {
-    fn name(&self) -> &str { "myservice" }
+impl ChatProvider for GandalfProvider {
+    fn name(&self) -> &str { "gandalf" }
     fn model(&self) -> &str { &self.model }
-
-    async fn chat(&self, messages: &[ChatMessage]) -> Result<String> {
-        // Build request, call API, return text response
-        todo!()
-    }
-
-    async fn chat_stream(
-        &self,
-        messages: &[ChatMessage],
-        on_chunk: Box<dyn Fn(StreamChunk) + Send>,
-    ) -> Result<String> {
-        // Call streaming endpoint, parse SSE, call on_chunk per token
-        // See gemini.rs or anthropic.rs for reference implementations
-        todo!()
-    }
-
-    async fn is_available(&self) -> bool {
-        !self.api_key.is_empty()
-    }
-
-    // Optional: implement tool calling
-    async fn chat_with_tools(
-        &self,
-        messages: &[ChatMessage],
-        tools: &[ToolDefinition],
-    ) -> Result<ToolCallResult> {
-        // If your API supports function calling, implement here
-        // See openai.rs for reference
-        // Default: falls back to plain chat (already provided by trait default)
-        let text = self.chat(messages).await?;
-        Ok(ToolCallResult::Text(text))
-    }
+    async fn chat(&self, messages: &[ChatMessage]) -> Result<String> { /* ... */ }
+    async fn chat_stream(&self, messages: &[ChatMessage], on_chunk: Box<dyn Fn(StreamChunk) + Send>) -> Result<String> { /* ... */ }
+    async fn is_available(&self) -> bool { /* ... */ }
 }
 ```
 
-### Step 2 — Export from `mod.rs`
+Then register it in `create_provider_with_model()` in `src/providers/mod.rs`.
 
-In `src/providers/mod.rs`:
+### Adding a New Tool (Forging a New Weapon)
+
+Tools live in `src/tools/implementations.rs`:
 
 ```rust
-mod myservice;
-pub use myservice::MyServiceProvider;
+pub struct PalantirVisionTool { /* ... */ }
+
+impl Tool for PalantirVisionTool {
+    fn name(&self) -> &'static str { "palantir_vision" }
+    fn description(&self) -> &'static str { "See far-off things, as Denethor once did" }
+    fn parameters(&self) -> Vec<ToolParam> { /* ... */ }
+    fn execute(&self, args: &HashMap<String, String>) -> ToolResult { /* ... */ }
+}
 ```
 
-### Step 3 — Add to factory
+Register it in `create_default_registry()` in `src/tools/mod.rs`.
 
-In `src/providers/mod.rs`, in `create_provider()`:
+### Adding a New Model (Mining Deeper)
+
+Add an entry to `MODELS` in `src/engine/model_catalog.rs`:
 
 ```rust
-"myservice" => {
-    let api_key = config
-        .get_credential("myservice")?
-        .ok_or_else(|| anyhow::anyhow!(
-            "MyService API key not configured. Run: mithril config set myservice <key>"
-        ))?;
-    Ok(Box::new(MyServiceProvider::new(api_key, &config.providers.myservice.model)))
+ModelInfo {
+    id: "mithrandir-7b",
+    display_name: "Mithrandir 7B",
+    file_name: "mithrandir-7b-Q4_K_M.gguf",
+    url: "https://huggingface.co/...",
+    size_mb: 4500,
+    template: "chatml",
 }
 ```
-
-### Step 4 — Add settings struct
-
-In `src/config/mod.rs`:
-
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MyServiceSettings {
-    #[serde(default = "default_myservice_model")]
-    pub model: String,
-}
-impl Default for MyServiceSettings {
-    fn default() -> Self { Self { model: default_myservice_model() } }
-}
-fn default_myservice_model() -> String { "myservice-model-v1".to_string() }
-```
-
-Add to `ProviderSettings`:
-
-```rust
-pub struct ProviderSettings {
-    pub gemini: GeminiSettings,
-    pub openai: OpenAISettings,
-    pub anthropic: AnthropicSettings,
-    pub myservice: MyServiceSettings,  // add this
-}
-```
-
-### Step 5 — Add to CLI
-
-In `src/cli/chat.rs`, `print_providers()` lists all providers. Add yours to `providers::available_providers()` in `src/providers/mod.rs`:
-
-```rust
-pub fn available_providers() -> Vec<&'static str> {
-    vec!["local", "gemini", "openai", "anthropic", "myservice"]
-}
-```
-
-### Step 6 — Document
-
-Add your provider to `docs/PROVIDERS.md` and the compatibility matrix in `docs/COMPATIBILITY.md`.
-
-### Checklist
-
-- [ ] `src/providers/myservice.rs` implements `ChatProvider`
-- [ ] Exported from `src/providers/mod.rs`
-- [ ] Added to `create_provider()` factory
-- [ ] Settings struct in `src/config/mod.rs`
-- [ ] Added to `available_providers()`
-- [ ] Added to `docs/PROVIDERS.md`
 
 ---
 
-## Adding a new tool
+## The Rules of the Road
 
-Tools are exposed via MCP `tools/call` and executed locally. There are 21 built-in tools; new ones can be added without modifying existing code.
+### Branch Protection (The Gates of Gondor)
 
-### Step 1 — Implement the `Tool` trait
+`main` is protected. You cannot push directly — not even if you are the King returned.
 
-In `src/tools/implementations.rs`, add a new struct:
+- All changes go through Pull Requests
+- Force push is forbidden (like using the One Ring)
+- Linear history enforced (no merge commits)
 
-```rust
-pub struct MyTool {
-    // Add operators or state your tool needs
-    file_op: FileOperator,
-}
+### What NOT to Commit (The Forbidden Pool)
 
-impl MyTool {
-    pub fn new(op: FileOperator) -> Self { Self { file_op: op } }
-}
+- API keys or secrets of any kind
+- Personal file paths (`/Users/your-name/...`)
+- IDE-specific files (`.idea/`, `.vscode/`)
+- Build artifacts (`target/`, `*.gguf`)
+- Temporary files (`tmp/`)
 
-impl Tool for MyTool {
-    fn name(&self) -> &'static str { "my_tool" }
-
-    fn description(&self) -> &'static str {
-        "Brief description of what this tool does"
-    }
-
-    fn parameters(&self) -> Vec<ToolParam> {
-        vec![
-            p("target", "The file path to operate on", true),
-            p("mode", "Optional mode: 'fast' or 'thorough'", false),
-        ]
-    }
-
-    fn execute(&self, args: &HashMap<String, String>) -> ToolResult {
-        let target = match args.get("target") {
-            Some(v) => v,
-            None => return ToolResult::err("Missing 'target'"),
-        };
-        // Implement your logic here
-        let result = self.file_op.read_file(target);
-        ToolResult::ok(result)
-    }
-}
-```
-
-> **Note:** `execute()` is synchronous. If you need async (HTTP calls, terminal), use the `block_on_async` helper already defined in `implementations.rs`.
-
-### Step 2 — Register in the factory
-
-In `src/tools/mod.rs`, add your tool to `create_default_registry()`:
-
-```rust
-pub fn create_default_registry(base_path: &str) -> ToolRegistry {
-    // ... existing tools ...
-    registry.register(MyTool::new(file_op.clone()));
-    registry
-}
-```
-
-### Step 3 — Document
-
-Add your tool to `docs/TOOLS.md`.
-
-### Checklist
-
-- [ ] Implements `Tool` trait in `implementations.rs`
-- [ ] Registered in `create_default_registry()`
-- [ ] `name()` is lowercase with underscores (e.g., `my_tool`)
-- [ ] `description()` is clear enough for an LLM to understand when to use it
-- [ ] All required parameters have `required: true`
-- [ ] Returns `ToolResult::err()` with a descriptive message on failure
-- [ ] Added to `docs/TOOLS.md`
+These are in `.gitignore`. Respect it as you would the borders of Lothlórien.
 
 ---
 
-## Adding a new model
+## Architecture Map (The Map of Middle-Earth)
 
-Models are compile-time constants in `src/engine/model_catalog.rs`.
-
-### Step 1 — Add to `MODELS`
-
-```rust
-pub const MODELS: &[ModelInfo] = &[
-    // ... existing models ...
-    ModelInfo {
-        id: "my-model-3b",
-        display_name: "My Model 3B (Description, ~2GB)",
-        file_name: "my-model-3b-instruct-q4_k_m.gguf",
-        download_url: "https://huggingface.co/org/repo/resolve/main/my-model-3b.gguf",
-        family: "my-model",
-        parameter_size: "3B",
-        quantization: "Q4_K_M",
-        chat_template: ChatTemplate::ChatML,  // pick the right template
-    },
-];
+```
+src/
+├── main.rs          # The Shire (where the journey starts)
+├── engine/          # Khazad-dûm (deep inference mines)
+├── providers/       # The Five Wizards (LLM backends)
+├── flow/            # Rivendell (orchestration council)
+├── tools/           # The Armory of Gondor (21 weapons)
+├── operators/       # The Rangers (execute in the wild)
+├── api/             # The Beacon Towers (HTTP signals)
+├── tui/             # Minas Tirith (the visible city)
+├── session/         # The Palantír Network (persistent sight)
+├── index/           # The Palantír itself (BM25 search)
+└── config/          # The Vaults (encrypted treasures)
 ```
 
-### Step 2 — Add Ollama-style aliases (optional)
+---
 
-In `normalize_ollama_name()`:
-
-```rust
-fn normalize_ollama_name(name: &str) -> &'static str {
-    match name {
-        // ... existing aliases ...
-        "my-model:3b" | "my-model-3b" => "my-model-3b",
-        _ => "",
-    }
-}
-```
-
-### Step 3 — Choose the right chat template
-
-| Template | Use when |
-|----------|----------|
-| `ChatML` | Model uses `<\|im_start\|>` / `<\|im_end\|>` |
-| `Llama3` | Model uses `<\|start_header_id\|>` / `<\|eot_id\|>` |
-| `Phi3` | Model uses `<\|user\|>` / `<\|end\|>` |
-
-Check the model card on HuggingFace or the GGUF metadata for the correct format.
-
-### Step 4 — Test
+## Testing (Proving Your Worth)
 
 ```bash
-mithril download-model --model my-model-3b
-mithril forge "Hello!"
-```
-
-### Checklist
-
-- [ ] Added to `MODELS` constant
-- [ ] Correct `chat_template` selected
-- [ ] Valid HuggingFace download URL
-- [ ] Ollama-style aliases added (optional but helpful)
-- [ ] Added to `README.md` model table
-- [ ] Added to `docs/CLI.md` download reference
-
----
-
-## Adding a new chat template
-
-If a model uses a format not covered by `ChatML`, `Llama3`, or `Phi3`:
-
-### Step 1 — Add enum variant
-
-In `src/engine/chat_template.rs`:
-
-```rust
-pub enum ChatTemplate {
-    ChatML,
-    Llama3,
-    Phi3,
-    MyFormat,  // add this
-}
-```
-
-### Step 2 — Implement formatting
-
-```rust
-pub fn format_chat(template: ChatTemplate, messages: &[ChatMessage]) -> String {
-    match template {
-        ChatTemplate::ChatML => format_chatml(messages),
-        ChatTemplate::Llama3 => format_llama3(messages),
-        ChatTemplate::Phi3 => format_phi3(messages),
-        ChatTemplate::MyFormat => format_my_format(messages),
-    }
-}
-
-fn format_my_format(messages: &[ChatMessage]) -> String {
-    let mut s = String::new();
-    for msg in messages {
-        s.push_str(&format!("[{}]\n{}\n[/{}]\n", msg.role, msg.content, msg.role));
-    }
-    s.push_str("[assistant]\n");
-    s
-}
-```
-
-### Step 3 — Add stop tokens
-
-```rust
-pub fn get_stop_tokens(template: ChatTemplate) -> Vec<String> {
-    match template {
-        // ...
-        ChatTemplate::MyFormat => vec!["[/assistant]".into(), "[user]".into()],
-    }
-}
-```
-
-### Step 4 — Write tests
-
-```rust
-#[test]
-fn test_my_format() {
-    let messages = vec![ChatMessage::new("user", "Hi")];
-    let result = format_chat(ChatTemplate::MyFormat, &messages);
-    assert!(result.contains("[user]\nHi\n[/user]\n"));
-    assert!(result.ends_with("[assistant]\n"));
-}
-```
-
----
-
-## Code style
-
-- Match the existing style: no unnecessary comments, minimal code, no unused imports
-- All new public functions need doc comments (`///`)
-- New modules must be added to `src/lib.rs` as `pub mod`
-- Run `cargo check` before submitting — warnings are acceptable, errors are not
-- Run `cargo test --lib` — all existing tests must pass
-
-## Running tests
-
-```bash
-# Unit tests only (fast, no model needed)
-cargo test --lib
-
-# All tests including integration (requires model file for full coverage)
+# Unit tests (the training grounds)
 cargo test
 
-# Single test
-cargo test test_encrypt_decrypt_roundtrip
+# Build check (the gates must hold)
+cargo check
+
+# Documentation (the libraries of Minas Tirith)
+cargo doc --open
+
+# End-to-end (the full quest)
+./tests/e2e_test.sh
 ```
 
 ---
 
-## Adding a new frontend (like Telegram)
+## Recognition (The Hall of Fame)
 
-A "frontend" is anything that claims a `SharedSession` and exchanges messages with an LLM.
+Contributors are honored in the tradition of the Dwarves — by the quality of their craft, not the quantity of their commits.
 
-### Step 1 — Register a frontend ID
+> *"All we have to decide is what to do with the time that is given us."* — Gandalf
 
-In `src/session/mod.rs`, add a constant:
+---
 
-```rust
-pub const FRONTEND_MYAPP: u8 = 3;  // next available ID
-```
+## Questions?
 
-And the name mapping:
+Open an issue. We don't have eagles to carry you to the answer, but we'll do our best.
 
-```rust
-pub fn frontend_name(id: u8) -> &'static str {
-    match id {
-        FRONTEND_TERMINAL => "terminal",
-        FRONTEND_TELEGRAM => "telegram",
-        FRONTEND_JUNIE    => "junie",
-        FRONTEND_MYAPP    => "myapp",   // add this
-        _ => "none",
-    }
-}
-```
-
-### Step 2 — Create the frontend module
-
-Create `src/cli/myapp.rs`. Minimal structure:
-
-```rust
-use crate::session::{SharedSession, FRONTEND_MYAPP};
-use tokio_util::sync::CancellationToken;
-
-pub async fn run_with_session(session: SharedSession, cancel: CancellationToken) -> anyhow::Result<()> {
-    // 1. Claim the frontend
-    session.claim_frontend(FRONTEND_MYAPP)?;
-
-    // 2. Your event loop
-    loop {
-        tokio::select! {
-            // receive input from your source
-            Some(user_text) = receive_message() => {
-                session.push(ChatMessage::user(&user_text));
-                let snap = session.snapshot();
-                let config = MithrilConfig::load()?;
-                let provider = providers::create_provider(&session.provider_name, &config)?;
-                let response = provider.chat(&snap).await?;
-                session.push(ChatMessage::assistant(&response));
-                send_response(&response).await;
-            }
-            _ = cancel.cancelled() => break,
-        }
-    }
-
-    // 3. Release the frontend
-    session.release_frontend(FRONTEND_MYAPP);
-    Ok(())
-}
-```
-
-### Step 3 — Add CLI subcommand
-
-In `src/main.rs`:
-
-```rust
-/// Start the MyApp frontend
-MyApp {
-    #[arg(long)]
-    session: Option<String>,
-},
-```
-
-And dispatch:
-
-```rust
-Commands::MyApp { session } => cli::myapp::run(session.as_deref()).await,
-```
-
-### Step 4 — Add `/start-myapp` command to chat
-
-In `src/cli/chat.rs`, in `handle_command()`:
-
-```rust
-"/start-myapp" => {
-    session.release_frontend(FRONTEND_TERMINAL);
-    // launch your frontend
-    CommandResult::Continue
-}
-```
-
-### Step 5 — Export from `cli/mod.rs`
-
-```rust
-pub mod myapp;
-```
-
-### Checklist
-
-- [ ] Frontend ID constant in `session/mod.rs`
-- [ ] `frontend_name()` updated
-- [ ] `src/cli/myapp.rs` with `run_with_session()`
-- [ ] CLI subcommand in `main.rs`
-- [ ] `/start-myapp` in `chat.rs`
-- [ ] Exported from `cli/mod.rs`
-- [ ] Added to `docs/SESSION.md` and `docs/COMPATIBILITY.md`
+> *"May it be a light to you in dark places, when all other lights go out."* — Galadriel
