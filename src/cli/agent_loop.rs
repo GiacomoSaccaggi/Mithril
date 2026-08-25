@@ -96,6 +96,37 @@ fn ask_permission(tool_name: &str, args: &std::collections::HashMap<String, Stri
     }
 }
 
+/// Execute a hook command if configured for this tool.
+/// Hooks are defined in .mithril/hooks.yaml as:
+///   before_write: "echo about to write {file}"
+///   after_edit: "cargo fmt -- {file}"
+fn run_hook(phase: &str, tool_name: &str, args: &std::collections::HashMap<String, String>) {
+    let hooks_path = std::path::Path::new(".mithril").join("hooks.yaml");
+    if !hooks_path.exists() { return; }
+
+    let content = match std::fs::read_to_string(&hooks_path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let hooks: std::collections::HashMap<String, String> = match serde_yaml::from_str(&content) {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+
+    let key = format!("{}_{}", phase, tool_name);
+    if let Some(cmd_template) = hooks.get(&key) {
+        let mut cmd = cmd_template.clone();
+        // Replace placeholders with actual args
+        for (k, v) in args {
+            cmd = cmd.replace(&format!("{{{}}}", k), v);
+        }
+        let _ = std::process::Command::new("sh")
+            .args(["-c", &cmd])
+            .output();
+    }
+}
+
 pub async fn run_agentic_loop(
     provider: &dyn ChatProvider,
     messages: &mut Vec<ChatMessage>,
@@ -176,7 +207,11 @@ pub async fn run_agentic_loop(
                             });
                             continue;
                         }
+                    // Hook: before
+                    run_hook("before", &call.name, &call.arguments);
                     let tool_result = execute_tool(registry, call);
+                    // Hook: after
+                    run_hook("after", &call.name, &call.arguments);
 
                     // Trace output
                     match trace_mode {
