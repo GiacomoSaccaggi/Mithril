@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // Registry has public API methods for external consumers
 use std::collections::HashMap;
 use serde_json::{json, Value};
 

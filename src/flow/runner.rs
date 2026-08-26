@@ -121,29 +121,12 @@ impl FlowRunner {
     /// Execute a single tool call and return its output as a string.
     /// Catches panics to prevent a misbehaving tool from crashing the flow.
     fn execute_tool(&self, call: &crate::providers::ToolCall) -> String {
-        let tool = match self.registry.get(&call.name) {
-            Some(t) => t,
-            None => return format!("Error: tool '{}' not found in registry", call.name),
-        };
-        let args = call.arguments.clone();
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            tool.execute(&args)
-        })) {
-            Ok(result) => result.output,
-            Err(_) => format!("Error: tool '{}' panicked during execution", call.name),
-        }
+        crate::tools::execute_tool_safe(&self.registry, call).output
     }
 
     /// Build ToolDefinition list for an agent, filtered by its tools list.
     fn build_tool_defs(&self, agent: &AgentConfig) -> Vec<ToolDefinition> {
-        let all_tools = self.registry.all();
-        all_tools.iter()
-            .filter(|t| {
-                agent.tools.contains(&"*".to_string())
-                    || agent.tools.contains(&t.name().to_string())
-            })
-            .map(|t| ToolDefinition::from_registry_tool(*t))
-            .collect()
+        crate::flow::build_filtered_tool_defs(&self.registry, &agent.tools)
     }
 }
 

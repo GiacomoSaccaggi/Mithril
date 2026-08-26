@@ -93,6 +93,26 @@ pub async fn list_models(State(_state): State<AppState>) -> Json<Value> {
         }
     }
 
+    // Fellowship virtual models — appear as selectable "models" for clients
+    if let Ok(fellowships) = crate::flow::fellowship::try_list_fellowships() {
+        for (name, config) in fellowships {
+            let agent_count = config.agents.len();
+            let desc = config.description.as_deref().unwrap_or("fellowship");
+            models.push(json!({
+                "name": format!("{}:latest", config.name),
+                "model": config.name,
+                "size": 0,
+                "details": {
+                    "family": "mithril-fellowship",
+                    "parameter_size": format!("{} agents", agent_count),
+                    "quantization_level": "orchestrated",
+                    "format": "fellowship"
+                },
+                "description": desc,
+            }));
+        }
+    }
+
     Json(json!({ "models": models }))
 }
 

@@ -46,7 +46,6 @@ rustyline = "14"
 crossterm = "0.28"
 ratatui = "0.29"
 colored = "2"
-atty = "0.2"
 
 # Encryption for credentials
 aes-gcm = "0.10"

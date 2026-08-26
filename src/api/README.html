@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+                        <html lang="en">
+                            <head>
+                            
+            <meta charset="utf-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="description" content="HTTP server exposing Mithril as an Ollama-compatible and OpenAI-compatible endpoint, plus MCP for Claude.">
+            <meta name="author" content="Mithril Project">
+            
+                            <title>Mithril — API — The Beacon Towers</title>
+                            
+            <link rel="shortcut icon" href="" />
+            <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/css/select2.min.css" rel="stylesheet"/>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/js/select2.min.js"></script>
+            <script src="https://code.highcharts.com/gantt/highcharts-gantt.js"></script>
+            <script>
+                var HighchartsGantt = Highcharts; // Rinomina Highcharts Gantt per evitare conflitti
+                // Ora puoi utilizzare Highcharts per Highcharts.js e HighchartsGantt per Highcharts Gantt
+            </script>
+            <script src="https://code.highcharts.com/highcharts.js"></script>
+            <script src="https://code.highcharts.com/modules/streamgraph.js"></script>
+            <script src="https://code.highcharts.com/modules/series-label.js"></script>
+            <script src="https://code.highcharts.com/modules/annotations.js"></script>
+            <script src="https://code.highcharts.com/modules/exporting.js"></script>
+            <script src="https://code.highcharts.com/modules/export-data.js"></script>
+            <script src="https://code.highcharts.com/modules/heatmap.js"></script>
+            <script src="https://code.highcharts.com/gantt/modules/exporting.js"></script>
+            <script src="https://code.highcharts.com/gantt/modules/pattern-fill.js"></script>
+            <script src="https://code.highcharts.com/gantt/modules/accessibility.js"></script>
+            <script>const colors = Highcharts.getOptions().colors;</script>
+
+            <!-- Prism.js syntax highlighting (Tomorrow Night theme) -->
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" />
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.css" />
+            <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js" data-manual></script>
+            <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+            <!-- Mermaid.js diagrams -->
+            <script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+            <!-- Asciinema player (terminal replay) -->
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.0/dist/bundle/asciinema-player.css" />
+            <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.0/dist/bundle/asciinema-player.min.js"></script>
+            <!-- diff2html (side-by-side diff with syntax highlight) -->
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/css/diff2html.min.css" />
+            <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.48/bundles/js/diff2html-ui.min.js"></script>
+
+            <style>
+            :root {
+              --bg: #ffffff;
+              --card: #f8fafc;
+              --accent: #6E37FA;
+              --accent2: #4614B4;
+              --accent3: #0f9d58;
+              --accent4: #e8590c;
+              --accent5: #d6336c;
+              --text: #1e293b;
+              --dim: #64748b;
+              --border: #e2e8f0;
+              --radius: 8px;
+              --baseFg: dimgray;
+              --baseBg: white;
+              --accentFg: #4614B4;
+              --accentBg: #6E37FA;
+            }
+            *{margin:0;padding:0;box-sizing:border-box}
+            html,body{font-family:Baloo 2, system-ui, sans-serif;font-size:15px;line-height:1.6;color:var(--text)}
+            html{overflow-x:hidden}
+            h1{font-size:2.2rem;font-weight:800;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+            h2{font-size:1.3rem;font-weight:700;color:var(--accent);margin:1rem 0 .5rem}
+            h3{font-size:1rem;font-weight:600;color:var(--text)}
+            h4{font-size:.9rem;color:var(--accent3)}
+            h5{font-size:.8rem;color:var(--dim)}
+            h6{font-size:.7rem;color:var(--dim)}
+            p{margin:.5rem 0;text-align:justify}
+            footer{text-align:center;padding:2rem 15%;color:var(--dim);font-size:.85rem}
+            header{
+              position:relative;
+              background-position:center;
+              background-repeat:no-repeat;
+              background-size:cover;
+              background-image:url(../../img/bg2.jpeg);
+              height:50%;
+              width:100%;
+              color:white;
+              text-align:left;
+              padding-top:5%;
+              padding-left:15%;
+            }
+            header h1{-webkit-text-fill-color:white;background:none}
+            .user-select-none .svg-container{height:100%;width:100%}
+            .report{
+              padding:2rem 10%;
+              max-width:1400px;
+              margin:0 auto;
+              background:var(--bg);
+            }
+            input[type=button],input[type=submit],input[type=reset]{
+              padding:12px 24px;
+              text-decoration:none;
+              margin:4px 2px;
+              cursor:pointer;
+              display:inline-block;
+              border-radius:var(--radius);
+              background-color:white;
+              color:var(--accent2);
+              border:2px solid var(--accent);
+              text-align:center;
+              transition:all .3s ease;
+              font-weight:600;
+              font-size:.85rem;
+            }
+            input[type=button]:hover,input[type=submit]:hover,input[type=reset]:hover{
+              background-color:var(--accent);
+              color:white;
+              box-shadow:0 4px 12px rgba(0,0,0,.1);
+            }
+            .plotly-graph-div{width:100%;min-height:200px;overflow:hidden}
+            #container{height:600px}
+            .highcharts-label-icon{opacity:0.5}
+            .highcharts-figure,.highcharts-data-table table{min-width:310px;max-width:100%;overflow:auto;margin:1em auto}
+            .highcharts-data-table table{font-family:inherit;border-collapse:collapse;border:1px solid var(--border);margin:10px auto;text-align:center;width:100%}
+            .highcharts-figure{width:100%;height:auto}
+            .highcharts-data-table caption{padding:1em 0;font-size:1.1em;color:var(--dim)}
+            .highcharts-data-table th{font-weight:600;padding:0.5em}
+            .highcharts-data-table td,.highcharts-data-table th,.highcharts-data-table caption{padding:0.5em}
+            .highcharts-data-table thead tr,.highcharts-data-table tr:nth-child(even){background:var(--card)}
+            .highcharts-data-table tr:hover{background:rgba(0,94,184,.04)}
+            #table-wrapper{position:relative}
+            #table-scroll{max-height:500px;overflow:auto;margin-top:20px;border:1px solid var(--border);border-radius:var(--radius)}
+            #table-wrapper table{width:100%;border-collapse:collapse}
+            #table-wrapper table *{color:var(--text)}
+            #table-wrapper table thead th{background:var(--accent);color:white;text-transform:uppercase;font-size:.7rem;letter-spacing:.04em;padding:.6rem .8rem}
+            #table-wrapper table td{padding:.45rem .8rem;border-bottom:1px solid var(--border);font-size:.85rem}
+            #table-wrapper table tr:nth-child(even){background:var(--card)}
+            #table-wrapper table tr:hover{background:rgba(0,94,184,.04)}
+            .column_result_save{float:left;width:50%;padding:10px}
+            code{color:var(--accent2);background:rgba(110,55,250,.07);padding:1px 5px;border-radius:3px;font-size:.85em}
+            select{
+              font:400 12px/1.3 sans-serif;
+              -webkit-appearance:none;
+              appearance:none;
+              color:var(--baseFg);
+              border:1px solid var(--border);
+              line-height:1;
+              outline:0;
+              padding:0.65em 2.5em 0.55em 0.75em;
+              border-radius:var(--radius);
+              background-color:var(--baseBg);
+              background-image:linear-gradient(var(--baseFg),var(--baseFg)),linear-gradient(-135deg,transparent 50%,var(--accentBg) 50%),linear-gradient(-225deg,transparent 50%,var(--accentBg) 50%),linear-gradient(var(--accentBg) 42%,var(--accentFg) 42%);
+              background-repeat:no-repeat;
+              background-size:1px 100%,20px 22px,20px 22px,20px 100%;
+              background-position:right 20px center,right bottom,right bottom,right bottom;
+            }
+            select:hover{
+              background-image:linear-gradient(var(--accentFg),var(--accentFg)),linear-gradient(-135deg,transparent 50%,var(--accentFg) 50%),linear-gradient(-225deg,transparent 50%,var(--accentFg) 50%),linear-gradient(var(--accentFg) 42%,var(--accentBg) 42%);
+            }
+            .collapsiblemygs{
+              background-color:var(--card);
+              color:var(--text);
+              cursor:pointer;
+              padding:14px 20px;
+              width:100%;
+              border:1px solid var(--border);
+              border-radius:var(--radius);
+              text-align:left;
+              outline:none;
+              font-size:.95rem;
+              font-weight:600;
+              margin-top:.75rem;
+              transition:all .2s ease;
+            }
+            .collapsiblemygs:hover,.active{
+              background-color:rgba(0,94,184,.04);
+              border-color:var(--accent);
+              color:var(--accent);
+            }
+            .content{
+              padding:1.2rem 1.5rem;
+              display:block;
+              overflow:hidden;
+              background-color:var(--card);
+              border:1px solid var(--border);
+              border-top:none;
+              border-radius:0 0 var(--radius) var(--radius);
+            }
+            @media only screen and (max-width:1024px){
+              .report{padding:1.5rem 5%}
+            }
+            @media only screen and (max-width:700px){
+              h2{font-size:1.1rem}
+              .collapsiblemygs{font-size:.85rem;padding:12px 16px}
+            }
+            @media print{
+              .collapsiblemygs{
+                page-break-before:always;
+                background-color:transparent !important;
+                color:black !important;
+                font-size:24px !important;
+                font-weight:bold;
+                border-bottom:2px solid var(--accentBg);
+                border:none !important;
+                padding:0 0 10px 0 !important;
+                margin-top:30px !important;
+              }
+              .content{
+                display:block !important;
+                background-color:white !important;
+                border:none !important;
+                padding:0 !important;
+              }
+              select,input[type="submit"],input[type="button"],label{display:none !important}
+              .print-grid-container{display:flex !important;flex-wrap:wrap !important;justify-content:space-between !important}
+              .print-grid-item{display:block !important;width:48% !important;page-break-inside:avoid}
+              body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+            }
+            .scomp-code-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin:1rem 0;position:relative}
+            .scomp-code-card h4{margin-bottom:.6rem;color:var(--accent)}
+            .scomp-code-card pre[class*="language-"]{border-radius:6px;margin:0;font-size:.82rem}
+            .scomp-code-card .scomp-copy-btn{position:absolute;top:.6rem;right:.6rem;background:rgba(255,255,255,.1);border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-size:.7rem;color:var(--dim);transition:all .2s;z-index:10}
+            .scomp-code-card .scomp-copy-btn:hover{background:var(--accent);color:white;border-color:var(--accent)}
+            .scomp-code-card .scomp-copy-btn.copied{background:var(--accent3);color:white;border-color:var(--accent3)}
+            .scomp-output-block{background:#1e1e2e;border:1px solid #313244;border-radius:6px;padding:.8rem 1rem;margin-top:.6rem;overflow-x:auto}
+            .scomp-output-block pre{margin:0;color:#cdd6f4;font-family:'Fira Code',Consolas,monospace;font-size:.78rem;white-space:pre-wrap;word-break:break-word}
+            .scomp-output-block .scomp-output-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:#6c7086;margin-bottom:.3rem;font-weight:600}
+            .scomp-diff-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin:1rem 0}
+            .scomp-diff-card h4{margin-bottom:.6rem;color:var(--accent)}
+            .scomp-diff-card .d2h-wrapper{border-radius:6px;overflow:hidden}
+            .scomp-mermaid-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin:1rem 0;text-align:center}
+            .scomp-mermaid-card h4{margin-bottom:.6rem;color:var(--accent);text-align:left}
+            .scomp-mermaid-card .mermaid{font-size:.85rem}
+            .scomp-terminal-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.2rem;margin:1rem 0}
+            .scomp-terminal-card h4{margin-bottom:.6rem;color:var(--accent)}
+            </style>
+            <script src="https://cdn.plot.ly/plotly-2.9.0.min.js"></script>
+        
+                            </head>
+                        <body>
+                            <header>
+                            <h1>Mithril — API — The Beacon Towers</h1><br><br><br>
+                        </header>
+                            <div class="report" style="background-color:WHITE">
+                                
+        <button id="darkToggle_2b35ab0e" onclick="toggleDarkMode_2b35ab0e()"
+            style="position:fixed;top:1rem;right:1rem;z-index:9999;
+            background:var(--card);border:1px solid var(--border);border-radius:50%;
+            width:40px;height:40px;cursor:pointer;font-size:1.2rem;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 8px rgba(0,0,0,.1);transition:all .3s;">🌙</button>
+        <script>
+        (function() {
+            var isDark = false;
+            var root = document.documentElement;
+            var btn = document.getElementById('darkToggle_2b35ab0e');
+            var lightVars = {
+                '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
+                '--dim': '#64748b', '--border': '#e2e8f0',
+            };
+            var darkVars = {
+                '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
+                '--dim': '#94a3b8', '--border': '#334155',
+            };
+            window.toggleDarkMode_2b35ab0e = function() {
+                isDark = !isDark;
+                var vars = isDark ? darkVars : lightVars;
+                Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
+                btn.textContent = isDark ? '☀️' : '🌙';
+                // Update body and report backgrounds
+                document.body.style.background = vars['--bg'];
+                var report = document.querySelector('.report');
+                if (report) report.style.background = vars['--bg'];
+                // Update tables
+                document.querySelectorAll('.scomp-table thead tr, .scomp-table th').forEach(function(el) {
+                    if (isDark) { el.style.backgroundColor = '#334155'; }
+                    else { el.style.backgroundColor = ''; }
+                });
+            };
+        })();
+        </script><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1rem 0;"><div style="background:var(--card);border:2px solid var(--border);
+                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
+                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Purpose</div>
+                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
+                    🏰
+                </div>
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">HTTP server exposing Mithril as an Ollama-compatible and OpenAI-compatible endpo</div>
+            </div><div style="background:var(--card);border:2px solid var(--border);
+                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
+                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Files</div>
+                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
+                    5
+                </div>
+                
+            </div><div style="background:var(--card);border:2px solid var(--border);
+                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
+                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">LOC</div>
+                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
+                    827
+                </div>
+                
+            </div></div><h2>Key Concept</h2><p><p style='font-size:1.1rem;'>External tools (Junie, OpenCode) connect here. They see fellowships as 'models' and talk standard protocols.</p></p><button class="collapsiblemygs">Supported Protocols</button> <div class="content"><p>
+        <p>Mithril exposes three API protocols simultaneously on the same port:</p>
+        
+        <h3>1. Ollama API (for Junie, OpenCode, Open WebUI)</h3>
+        <ul>
+            <li><code>GET /api/tags</code> — list available models (fellowships appear here)</li>
+            <li><code>POST /api/chat</code> — chat completion with streaming</li>
+            <li><code>POST /api/generate</code> — text generation</li>
+        </ul>
+        
+        <h3>2. OpenAI API (for LangChain, custom apps)</h3>
+        <ul>
+            <li><code>GET /v1/models</code> — list models</li>
+            <li><code>POST /v1/chat/completions</code> — chat completion</li>
+        </ul>
+        
+        <h3>3. MCP Protocol (for Claude Desktop)</h3>
+        <ul>
+            <li><code>POST /mcp</code> — JSON-RPC 2.0 for tool discovery and execution</li>
+        </ul>
+        
+        <h3>How Clients Connect</h3>
+        <p>Point any Ollama-compatible client to <code>http://localhost:16180</code>. 
+        Fellowships appear as selectable "models". The client doesn't know it's talking to 
+        an orchestrated team of models.</p>
+    </p></div><button class="collapsiblemygs">Endpoint Reference</button> <div class="content"><a href="#" onclick="download_table_as_csv('endpoints');">Download as CSV</a>
+            <div id="table-wrapper">
+                <div id="table-scroll">
+                    <table border="0" id="endpoints" class="scomp-table">
+  <thead>
+    <tr style="text-align: left;">
+      <th>Endpoint</th>
+      <th>Protocol</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>GET /health</td>
+      <td>—</td>
+      <td>Health check + version</td>
+    </tr>
+    <tr>
+      <td>GET /api/tags</td>
+      <td>Ollama</td>
+      <td>List models (includes fellowships)</td>
+    </tr>
+    <tr>
+      <td>POST /api/chat</td>
+      <td>Ollama</td>
+      <td>Chat with streaming support</td>
+    </tr>
+    <tr>
+      <td>POST /api/generate</td>
+      <td>Ollama</td>
+      <td>Text generation</td>
+    </tr>
+    <tr>
+      <td>GET /v1/models</td>
+      <td>OpenAI</td>
+      <td>List models</td>
+    </tr>
+    <tr>
+      <td>POST /v1/chat/completions</td>
+      <td>OpenAI</td>
+      <td>Chat completion</td>
+    </tr>
+    <tr>
+      <td>POST /mcp</td>
+      <td>MCP</td>
+      <td>JSON-RPC tool calls (24 tools)</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+            </div>
+            <style>
+                .scomp-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                    font-family: inherit;
+                }
+                .scomp-table thead tr {
+                    background-color: #6E37FA !important;
+                    color: white !important;
+                    text-align: left;
+                }
+                .scomp-table th {
+                    color: white !important;
+                    background-color: #6E37FA !important;
+                }
+                .scomp-table th, .scomp-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                .scomp-table tbody tr:nth-child(even) {
+                    background-color: #f8f9fa;
+                }
+                .scomp-table tbody tr:hover {
+                    background-color: #9682FF22;
+                }
+            </style></div><button class="collapsiblemygs">File Inventory</button> <div class="content"><p><table style='width:100%;font-size:.85rem;'><tr><th style='text-align:left;'>File</th><th>Purpose</th></tr><tr><td><code>mcp.rs</code></td><td></td></tr><tr><td><code>mod.rs</code></td><td></td></tr><tr><td><code>ollama.rs</code></td><td></td></tr><tr><td><code>openai.rs</code></td><td></td></tr><tr><td><code>server.rs</code></td><td></td></tr></table></p></div>
+                            </div>
+                            
+                        <script>
+                        // Quick and simple export target #table_id into a csv
+                        function download_table_as_csv(table_id, separator = ',') {
+                            var rows = document.querySelectorAll('table#' + table_id + ' tr');
+                            var csv = [];
+                            for (var i = 0; i < rows.length; i++) {
+                                var row = [], cols = rows[i].querySelectorAll('td, th');
+                                for (var j = 0; j < cols.length; j++) {
+                                    var data = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, '').replace(/(\s\s)/gm, ' ')
+                                    data = data.replace(/"/g, '""');
+                                    row.push('"' + data + '"');
+                                }
+                                csv.push(row.join(separator));
+                            }
+                            var csv_string = csv.join('\n');
+                            var filename = 'export_' + table_id + '_' + new Date().toLocaleDateString() + '.csv';
+                            var link = document.createElement('a');
+                            link.style.display = 'none';
+                            link.setAttribute('target', '_blank');
+                            link.setAttribute('href', 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv_string));
+                            link.setAttribute('download', filename);
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        }
+
+                        // Resize all Plotly charts within a container
+                        function resizePlotsIn(container) {
+                            if (!window.Plotly) return;
+                            var plots = container.querySelectorAll('.js-plotly-plot');
+                            plots.forEach(function(plot) {
+                                Plotly.Plots.resize(plot);
+                            });
+                        }
+
+                        // Collapsible sections with Plotly resize on open
+                        var coll = document.getElementsByClassName("collapsiblemygs");
+                        // Collapse all sections immediately (do not rely on DOMContentLoaded which may have already fired)
+                        for (var ci = 0; ci < coll.length; ci++) {
+                            var sibling = coll[ci].nextElementSibling;
+                            if (sibling) sibling.style.display = 'none';
+                        }
+                        for (var i = 0; i < coll.length; i++) {
+                          coll[i].addEventListener("click", function() {
+                            this.classList.toggle("active");
+                            var content = this.nextElementSibling;
+                            if (content.style.display === "none") {
+                              content.style.display = "block";
+                              // Resize Plotly charts after section becomes visible
+                              setTimeout(function() { resizePlotsIn(content); }, 50);
+                              setTimeout(function() { resizePlotsIn(content); }, 300);
+                              // Highlight code blocks that were hidden
+                              if (window.Prism) { setTimeout(function() { Prism.highlightAllUnder(content); }, 50); }
+                            } else {
+                              content.style.display = "none";
+                            }
+                          });
+                        }
+
+                        document.addEventListener("DOMContentLoaded", function() {
+                            // Collapse all sections (fallback)
+                            var contents = document.querySelectorAll('.content');
+                            contents.forEach(function(content) {
+                                content.style.display = 'none';
+                            });
+
+                            // Highcharts containers: ensure 100% width
+                            document.querySelectorAll('.highcharts-container').forEach(function(item) {
+                                item.style.width = '100%';
+                            });
+
+                            // Global ResizeObserver: auto-resize all Plotly charts on container resize
+                            if (window.ResizeObserver && window.Plotly) {
+                                var ro = new ResizeObserver(function(entries) {
+                                    entries.forEach(function(entry) {
+                                        var plot = entry.target.querySelector('.js-plotly-plot') || entry.target;
+                                        if (plot && plot.classList.contains('js-plotly-plot')) {
+                                            Plotly.Plots.resize(plot);
+                                        }
+                                    });
+                                });
+                                document.querySelectorAll('.plotly-graph-div').forEach(function(div) {
+                                    ro.observe(div);
+                                });
+                                // Also observe for dynamically added charts
+                                var bodyObserver = new MutationObserver(function(mutations) {
+                                    mutations.forEach(function(m) {
+                                        m.addedNodes.forEach(function(node) {
+                                            if (node.nodeType === 1) {
+                                                var divs = node.querySelectorAll ? node.querySelectorAll('.plotly-graph-div') : [];
+                                                divs.forEach(function(d) { ro.observe(d); });
+                                                if (node.classList && node.classList.contains('plotly-graph-div')) { ro.observe(node); }
+                                            }
+                                        });
+                                    });
+                                });
+                                bodyObserver.observe(document.body, { childList: true, subtree: true });
+                            }
+
+                            // Fallback: resize all visible Plotly charts on window resize
+                            window.addEventListener('resize', function() {
+                                if (!window.Plotly) return;
+                                document.querySelectorAll('.js-plotly-plot').forEach(function(plot) {
+                                    Plotly.Plots.resize(plot);
+                                });
+                            });
+
+                            // Mermaid.js: initialize diagrams
+                            if (window.mermaid) { mermaid.initialize({startOnLoad:true, theme:"neutral", securityLevel:"loose"}); }
+
+                            // Prism.js: highlight all visible code blocks
+                            if (window.Prism) { Prism.highlightAll(); }
+
+                            // Copy-to-clipboard buttons
+                            document.querySelectorAll('.scomp-copy-btn').forEach(function(btn) {
+                                btn.addEventListener('click', function() {
+                                    var codeEl = this.closest('.scomp-code-card').querySelector('code');
+                                    if (codeEl) {
+                                        navigator.clipboard.writeText(codeEl.textContent).then(function() {
+                                            btn.textContent = '✓ Copied';
+                                            btn.classList.add('copied');
+                                            setTimeout(function() { btn.textContent = '⧉ Copy'; btn.classList.remove('copied'); }, 2000);
+                                        });
+                                    }
+                                });
+                            });
+                        });
+
+                        </script>
+                        </div><hr><br><footer><strong>About scomp-link</strong><br>
+                        scomp-link is a general-purpose data science toolkit for preprocessing, model selection, and validation. It is dataset- and domain-agnostic.
+                        Learn more in the project README and documentation.<br>
+                        <strong>May the code be with you.</strong><br><br>
+                        Copyright &copy; 2026 scomp-link contributors. All rights reserved.<br><br></footer>
+
+                            
+                        <script>
+                        $(".js-example-tags").select2({
+                          tags: true
+                        });
+                        </script>
+                        </body>
+                        </html>
+                    

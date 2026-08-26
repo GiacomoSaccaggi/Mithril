@@ -7,9 +7,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
-use dirs;
 
-use axum::{routing::{get, post}, Router};
+use axum::{routing::post, Router};
 use parking_lot::Mutex;
 use tokio::net::TcpListener;
 
@@ -274,7 +273,9 @@ async fn test_session_file_permissions() {
 
 // ── Helper per server con token auth ─────────────────────────────────────────
 
-async fn spawn_server_with_token(token: &str) -> (String, tempfile::TempDir) {
+#[allow(dead_code)]
+async
+fn spawn_server_with_token(token: &str) -> (String, tempfile::TempDir) {
     let tmp = tempfile::tempdir().unwrap();
     let state = AppState {
         model_manager: Arc::new(LazyModelManager::new(tmp.path().join("model.gguf"), 60)),

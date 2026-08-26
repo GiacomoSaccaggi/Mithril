@@ -10,11 +10,11 @@ pub struct ChatLine {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-#[allow(dead_code)]
 pub enum Role {
     User,
     Assistant,
     System,
+    #[allow(dead_code)]
     Tool { name: String, success: bool },
     AgentTrace { agent: String, detail: String },
     Summary { rounds: u32, tokens: String },
@@ -74,6 +74,7 @@ pub struct App {
     pub sidebar_visible: bool,
     /// Fellowship name
     pub fellowship_name: String,
+    pub agent_names: Vec<String>,
     /// Session ID (truncated)
     pub session_id: String,
     /// Files touched in this session
@@ -99,17 +100,7 @@ pub struct App {
 }
 
 /// All available slash commands with descriptions.
-pub const COMMANDS: &[(&str, &str)] = &[
-    ("/exit", "Exit chat"),
-    ("/clear", "Clear conversation"),
-    ("/compact", "Compress conversation to free context"),
-    ("/fellowship", "Switch fellowship or show current config"),
-    ("/undo", "Undo last action (conversation + files)"),
-    ("/redo", "Redo undone action"),
-    ("/session", "Show session info"),
-    ("/history", "Show message history"),
-    ("/help", "Show help"),
-];
+pub use crate::cli::chat_core::COMMANDS;
 
 impl App {
     pub fn new(fellowship_name: &str, _model: &str, session_id: &str) -> Self {
@@ -121,7 +112,7 @@ impl App {
             history_index: None,
             scroll_offset: 0,
             focus: Focus::Input,
-            sidebar_visible: true,
+            sidebar_visible: false,
             fellowship_name: fellowship_name.to_string(),
             session_id: session_id[..8.min(session_id.len())].to_string(),
             files_touched: Vec::new(),
@@ -134,6 +125,7 @@ impl App {
             suggestion_index: 0,
             current_round: 0,
             max_rounds: 0,
+            agent_names: Vec::new(),
         }
     }
 
@@ -152,6 +144,60 @@ impl App {
             self.suggestions.clear();
             self.suggestion_index = 0;
         }
+    }
+
+    /// Get agent suggestions when input starts with #
+    pub fn get_agent_suggestions(&self) -> Vec<String> {
+        if !self.input.starts_with('#') || self.input.contains(' ') {
+            return vec![];
+        }
+        let prefix = &self.input[1..self.cursor.min(self.input.len()).saturating_sub(0)];
+        let prefix = if prefix.is_empty() { "" } else { &self.input[1..] };
+        self.agent_names.iter()
+            .filter(|name| name.to_lowercase().starts_with(&prefix.to_lowercase())).cloned()
+            .collect()
+    }
+
+    /// Update file suggestions for @ mentions.
+    /// Returns file paths matching the current @prefix in input.
+    pub fn get_file_suggestions(&self) -> Vec<String> {
+        // Find the last @ in input that's at start or after whitespace
+        let text = &self.input[..self.cursor.min(self.input.len())];
+        let at_pos = text.rfind('@');
+        let at_pos = match at_pos {
+            Some(p) if p == 0 || text.as_bytes()[p - 1].is_ascii_whitespace() => p,
+            _ => return vec![],
+        };
+
+        let prefix = &text[at_pos + 1..];
+        let (dir, file_prefix) = if let Some(slash) = prefix.rfind('/') {
+            (&prefix[..slash + 1], &prefix[slash + 1..])
+        } else {
+            ("", prefix)
+        };
+
+        let search_dir = if dir.is_empty() { "." } else { dir };
+        let entries = match std::fs::read_dir(search_dir) {
+            Ok(e) => e,
+            Err(_) => return vec![],
+        };
+
+        entries.flatten()
+            .filter_map(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                if name.starts_with('.') { return None; }
+                if !name.to_lowercase().starts_with(&file_prefix.to_lowercase()) {
+                    return None;
+                }
+                let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                if is_dir {
+                    Some(format!("{}{}/", dir, name))
+                } else {
+                    Some(format!("{}{}", dir, name))
+                }
+            })
+            .take(8)
+            .collect()
     }
 
     /// Accept the current suggestion (replace input with it).

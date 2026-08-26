@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
+use std::io::IsTerminal;
 
 mod cli;
 mod engine;
@@ -40,9 +41,9 @@ enum Commands {
         /// Resume an existing session by ID
         #[arg(long)]
         session: Option<String>,
-        /// Use plain readline REPL instead of TUI
+        /// Use full-screen TUI with panels and popups
         #[arg(long)]
-        plain: bool,
+        tui: bool,
         /// Skip all tool confirmation prompts (auto-approve everything)
         #[arg(long)]
         no_confirm: bool,
@@ -104,12 +105,7 @@ enum Commands {
     Fellowships,
     /// Run agentic task non-interactively (headless mode for CI/CD)
     Exec(cli::exec::ExecArgs),
-    /// Start server + interactive chat in one command (recommended)
-    Start {
-        /// Port to listen on
-        #[arg(short, long, default_value = "16180")]
-        port: u16,
-    },
+
     /// Initialize project: analyze codebase and generate MITHRIL.md steering file
     Init,
 }
@@ -132,9 +128,8 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Serve { port } => cli::serve::run(port).await,
         Commands::Forge { prompt } => cli::forge::run(&prompt).await,
-        Commands::Chat { fellowship, session, plain, no_confirm, serve, port } => {
+        Commands::Chat { fellowship, session, tui, no_confirm, serve, port } => {
             if no_confirm {
-                // Set all dangerous tools to "allow" for this session
                 std::env::set_var("MITHRIL_NO_CONFIRM", "1");
             }
 
@@ -154,10 +149,8 @@ async fn main() -> Result<()> {
                 eprintln!("  Server running on http://localhost:{}", port);
             }
 
-            if plain || !atty::is(atty::Stream::Stdout) {
-                cli::chat::run(fellowship.as_deref(), session.as_deref()).await
-            } else {
-                // TUI mode
+            if tui && std::io::stdout().is_terminal() {
+                // TUI mode (full-screen with panels)
                 let config = config::MithrilConfig::load()?;
                 let fellowship_config = match fellowship.as_deref() {
                     Some(name) => crate::flow::fellowship::load_by_name(name)?,
@@ -168,6 +161,9 @@ async fn main() -> Result<()> {
                     None => crate::session::SharedSession::new(&fellowship_config.name),
                 };
                 tui::run(&fellowship_config, &sess, &config).await
+            } else {
+                // Plain REPL (default)
+                cli::chat::run(fellowship.as_deref(), session.as_deref()).await
             }
         }
         Commands::Config { action, key, value } => {
@@ -189,9 +185,7 @@ async fn main() -> Result<()> {
         Commands::Fellowship { action } => cli::fellowship::run(&action).await,
         Commands::Fellowships => cli::fellowships::run().await,
         Commands::Exec(args) => cli::exec::run(args).await,
-        Commands::Start { port } => {
-            cli::start::run(port).await
-        }
+
         Commands::Init => cli::init::run().await,
     }
 }

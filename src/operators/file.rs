@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // FileOperator has context-dependent methods
 use std::fs;
 use std::path::{Path, PathBuf};
 

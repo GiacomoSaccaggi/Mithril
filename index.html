@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mithril — Multi-Model Orchestration Engine</title>
+    <link rel="icon" type="image/gif" href="img/easter.gif">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Pinyon+Script&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; overflow: hidden; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: #e2e8f0;
+            background: url('img/bg.jpg') center/cover no-repeat fixed;
+            display: flex;
+            flex-direction: column;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 5, 10, 0.82);
+            z-index: 0;
+        }
+
+        /* ═══ NAV ═══ */
+        nav {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2rem 5%;
+        }
+        nav a {
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        nav a:hover { color: #D4AF37; }
+        .nav-right { display: flex; gap: 2rem; align-items: center; }
+
+        /* ═══ 3D RING (nav brand) ═══ */
+        .ring-nav {
+            position: relative;
+            width: 50px;
+            height: 50px;
+            perspective: 200px;
+            display: inline-block;
+        }
+        .ring-nav a {
+            display: block;
+            width: 100%;
+            height: 100%;
+            text-decoration: none;
+        }
+        .ring-bearer {
+            font-size: 0;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-left: -10em;
+            margin-top: -0.5em;
+            animation: ring-spin 15s infinite linear;
+            transform: rotateX(-30deg);
+            transform-style: preserve-3d;
+            transform-origin: center center;
+            width: 20em;
+        }
+        .ring {
+            font-size: 5px;
+            position: absolute;
+            top: 0;
+            left: 1em;
+            width: 1em;
+            white-space: nowrap;
+            display: inline-block;
+            backface-visibility: hidden;
+            transform-origin: left center;
+            transform-style: preserve-3d;
+            transform: rotateY(18deg);
+        }
+        .ring .text,
+        .ring .top-1,
+        .ring .bottom-1,
+        .ring .bottom-2 {
+            width: 1em;
+            height: 1em;
+            line-height: 1em;
+            background-image: linear-gradient(to bottom right, #fff 0%, #FFFC84 17%, #D4AF37 33%, #FFFC84 67%, #D4AF37 83%, #886300 100%);
+            background-repeat: repeat;
+            background-size: 20em 5em;
+            backface-visibility: hidden;
+            transform-style: preserve-3d;
+        }
+        .ring .text {
+            overflow: hidden;
+            background-position: 0 -2em;
+            color: #D4AF37;
+            letter-spacing: .25em;
+            font-family: 'Pinyon Script', cursive;
+            text-shadow: -1px -1px 1px #FFFC84, 1px 1px 1px #886300;
+        }
+        .ring .top-1 {
+            position: relative;
+            height: 0.5em;
+            background-position: 0 -1.5em;
+            transform: rotateX(30deg);
+            transform-origin: center bottom;
+        }
+        .ring .bottom-1 {
+            position: relative;
+            height: 0.5em;
+            background-position: 0 -3em;
+            transform: rotateX(-30deg);
+            transform-origin: center top;
+        }
+        .ring .bottom-2 {
+            position: absolute;
+            left: 0;
+            bottom: -1.5em;
+            height: 1.5em;
+            background-position: 0 -3.5em;
+            transform: rotateX(-150deg) scaleY(1.2);
+            transform-origin: center top;
+        }
+
+        @keyframes ring-spin {
+            from { transform: rotateY(0deg) rotateX(-30deg); }
+            to { transform: rotateY(360deg) rotateX(-30deg); }
+        }
+
+        .nav-brand-text {
+            font-family: 'Cinzel', serif;
+            font-weight: 900;
+            font-size: 0.9rem;
+            background: linear-gradient(135deg, #D4AF37, #FFFC84);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+
+        .nav-brand-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .nav-brand-wrap > a {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        /* ═══ MAIN ═══ */
+        main {
+            position: relative;
+            z-index: 10;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 2rem;
+        }
+
+        h1 {
+            font-family: 'Cinzel', serif;
+            font-size: clamp(4rem, 12vw, 9rem);
+            font-weight: 900;
+            background: linear-gradient(180deg, #FFFC84 0%, #D4AF37 50%, #886300 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 0.9;
+            margin-bottom: 1.2rem;
+        }
+
+        .tagline {
+            font-size: clamp(1rem, 2.5vw, 1.3rem);
+            color: #94a3b8;
+            max-width: 600px;
+            line-height: 1.7;
+            margin-bottom: 1.5rem;
+        }
+
+        .nerd-quote {
+            font-family: 'Pinyon Script', cursive;
+            font-size: clamp(1.3rem, 3.5vw, 2rem);
+            color: #D4AF37;
+            text-shadow: 0 0 20px rgba(212,175,55,0.4);
+            animation: glow 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px rgba(212,175,55,0.3); }
+            to { text-shadow: 0 0 30px rgba(212,175,55,0.6), 0 0 60px rgba(212,175,55,0.2); }
+        }
+
+        /* ═══ FOOTER ═══ */
+        footer {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            padding: 1.2rem 5%;
+            border-top: 1px solid rgba(212,175,55,0.1);
+        }
+        .footer-info {
+            font-size: 0.75rem;
+            color: #475569;
+        }
+        .footer-info a {
+            color: #64748b;
+            text-decoration: none;
+        }
+        .footer-info a:hover { color: #D4AF37; }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="nav-brand-wrap">
+            <a href="https://giacomosaccaggi.github.io/">
+                <div class="ring-nav">
+                    <div class="ring-bearer">
+                        <div class="ring ring-1">
+                            <div class="top-1"></div>
+                            <div class="text">This is not elvish script.</div>
+                            <div class="bottom-1">
+                                <div class="bottom-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <span class="nav-brand-text">Mithril</span>
+            </a>
+        </div>
+        <div class="nav-right">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="https://github.com/GiacomoSaccaggi/mithril">GitHub</a>
+            <a href="documentation.html">Documentation</a>
+        </div>
+    </nav>
+
+    <main>
+        <h1>MITHRIL</h1>
+        <p class="tagline">
+            Multi-model orchestration engine. Combine any LLM providers into a single
+            Ollama-compatible API. Point Junie, OpenCode, or any client at it.
+        </p>
+        <p class="nerd-quote">One Engine to Serve Them All</p>
+    </main>
+
+    <footer>
+        <div class="footer-info">
+            MIT License · Rust · 5 Providers · 24 Tools · 3 Protocols<br>
+            Copyright © <a href="https://giacomosaccaggi.github.io/">GiacomoSaccaggi</a>
+        </div>
+    </footer>
+
+    <script>
+    // Build the 3D ring recursively
+    (function() {
+        var i = 2;
+        var ring = '<div class="ring"><div class="top-1"></div><div class="text">This is not elvish script.</div><div class="bottom-1"><div class="bottom-2"></div></div></div>';
+        while (i <= 20) {
+            $(ring).appendTo($('.ring-'+(i-1))).addClass('ring-'+i);
+            i++;
+        }
+    })();
+    </script>
+</body>
+</html>

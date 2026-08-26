@@ -671,3 +671,8 @@ role: "Test"
         assert!(agent.can_call.is_empty());
     }
 }
+
+/// List fellowships without panicking (for API layer).
+pub fn try_list_fellowships() -> anyhow::Result<Vec<(String, FellowshipConfig)>> {
+    Ok(list_fellowships())
+}

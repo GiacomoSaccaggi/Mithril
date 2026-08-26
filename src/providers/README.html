@@ -5,10 +5,10 @@
             <meta charset="utf-8">
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta name="description" content="Automatic Report">
-            <meta name="author" content="scomp-link toolkit">
+            <meta name="description" content="Conceptual guide: what every provider does, how they differ, and how to add your own">
+            <meta name="author" content="Mithril Project">
             
-                            <title>Mithril — Getting Started & Architecture Guide</title>
+                            <title>Mithril Providers — How to Add & Understand Providers</title>
                             
             <link rel="shortcut icon" href="" />
             <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
@@ -80,7 +80,7 @@
               background-position:center;
               background-repeat:no-repeat;
               background-size:cover;
-              background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+              background-image:url(../../img/bg1.png);
               height:50%;
               width:100%;
               color:white;
@@ -238,215 +238,405 @@
                             </head>
                         <body>
                             <header>
-                            <h1>Mithril — Getting Started & Architecture Guide</h1><br><br><br>
+                            <h1>Mithril Providers — How to Add & Understand Providers</h1><br><br><br>
                         </header>
                             <div class="report" style="background-color:WHITE">
-                                <button class="collapsiblemygs">What is Mithril?</button> <div class="content"><p><strong>Mithril</strong> is a lightweight, standalone LLM inference engine written in Rust. Single binary, no runtime dependencies. Serves GGUF models via Ollama-compatible API, OpenAI-compatible API, and MCP stdio.</p><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1rem 0;"><div style="background:var(--card);border:2px solid var(--accent3);
-                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
-                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Binary</div>
-                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    Single Rust
-                </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">No JVM/Python/Node</div>
-            </div><div style="background:var(--card);border:2px solid var(--accent3);
-                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
-                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">APIs</div>
-                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    3
-                </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Ollama + OpenAI + MCP</div>
-            </div><div style="background:var(--card);border:2px solid var(--accent3);
+                                
+        <button id="darkToggle_90720d78" onclick="toggleDarkMode_90720d78()"
+            style="position:fixed;top:1rem;right:1rem;z-index:9999;
+            background:var(--card);border:1px solid var(--border);border-radius:50%;
+            width:40px;height:40px;cursor:pointer;font-size:1.2rem;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 2px 8px rgba(0,0,0,.1);transition:all .3s;">🌙</button>
+        <script>
+        (function() {
+            var isDark = false;
+            var root = document.documentElement;
+            var btn = document.getElementById('darkToggle_90720d78');
+            var lightVars = {
+                '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
+                '--dim': '#64748b', '--border': '#e2e8f0',
+            };
+            var darkVars = {
+                '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
+                '--dim': '#94a3b8', '--border': '#334155',
+            };
+            window.toggleDarkMode_90720d78 = function() {
+                isDark = !isDark;
+                var vars = isDark ? darkVars : lightVars;
+                Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
+                btn.textContent = isDark ? '☀️' : '🌙';
+                // Update body and report backgrounds
+                document.body.style.background = vars['--bg'];
+                var report = document.querySelector('.report');
+                if (report) report.style.background = vars['--bg'];
+                // Update tables
+                document.querySelectorAll('.scomp-table thead tr, .scomp-table th').forEach(function(el) {
+                    if (isDark) { el.style.backgroundColor = '#334155'; }
+                    else { el.style.backgroundColor = ''; }
+                });
+            };
+        })();
+        </script><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1rem 0;"><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
                     letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
                     5
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Local + 4 cloud</div>
-            </div><div style="background:var(--card);border:2px solid var(--accent3);
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Gemini, OpenAI, Anthropic, Groq, Local</div>
+            </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Tools</div>
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Shared Interface</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    36
+                    5 methods
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">21 built-in + 15 scomp-link</div>
-            </div><div style="background:var(--card);border:2px solid var(--accent3);
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">ChatProvider trait</div>
+            </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Tests</div>
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Pattern</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    380
+                    Strategy
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">54% line coverage</div>
-            </div><div style="background:var(--card);border:2px solid var(--accent3);
-                border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
-                <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">TUI</div>
-                <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    ratatui
-                </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Splash + Plan/Build</div>
-            </div></div></div><button class="collapsiblemygs">Installation & Quick Start</button> <div class="content"><div class="scomp-code-card">
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">swap providers without touching orchestrator</div>
+            </div></div><h2>What is a Provider?</h2><p>
+        <p>A <strong>Provider</strong> is Mithril's adapter for a specific LLM API. It translates the unified 
+        <code>ChatProvider</code> interface into the HTTP calls, headers, and payload format that each API expects.</p>
+        <p>The orchestrator never knows which provider it's using — it just calls <code>provider.chat(messages)</code>
+        and gets a response. This means you can swap Gemini for GPT-4 by changing one line in the fellowship YAML.</p>
+    </p><div class="scomp-mermaid-card">
+<h4>Provider Selection Flow</h4>
+<pre class="mermaid">flowchart LR
+    ORCH(Orchestrator) -->|ChatProvider trait| FACTORY(Factory)
+    FACTORY --> GEM(Gemini)
+    FACTORY --> OAI(OpenAI)
+    FACTORY --> ANT(Anthropic)
+    FACTORY --> GRQ(Groq)
+    FACTORY --> LOC(Local GGUF)</pre>
+</div><h2>The ChatProvider Trait — 5 Methods Every Provider Implements</h2><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<pre ><code class="language-bash"># Prerequisites (macOS)
-brew install cmake
-xcode-select --install
-curl --proto &#x27;=https&#x27; --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Build
-git clone https://github.com/GiacomoSaccaggi/mithril.git
-cd mithril
-cargo build --release
-
-# First run
-mithril download-model --model qwen-1.5b
-mithril config set gemini &quot;AIza...&quot;
-mithril start</code></pre>
-</div></div><button class="collapsiblemygs">CLI Commands</button> <div class="content"><table><tr><th>Command</th><th>Description</th></tr>
-<tr><td><code>mithril start</code></td><td>Server + TUI chat (recommended)</td></tr>
-<tr><td><code>mithril init</code></td><td>Analyze project → generate MITHRIL.md</td></tr>
-<tr><td><code>mithril chat [--plain] [--no-confirm]</code></td><td>Interactive chat (TUI default)</td></tr>
-<tr><td><code>mithril flow "msg"</code></td><td>Agentic Planner→Tools loop</td></tr>
-<tr><td><code>mithril fellowship status|init|test</code></td><td>Multi-agent orchestration</td></tr>
-<tr><td><code>mithril exec "prompt" [--json]</code></td><td>Headless CI/CD</td></tr>
-<tr><td><code>mithril serve --port 16180</code></td><td>HTTP server only</td></tr>
-<tr><td><code>mithril scan</code></td><td>Build BM25 index</td></tr>
-<tr><td><code>mithril telegram</code></td><td>Telegram bot</td></tr>
-<tr><td><code>mithril config set key val</code></td><td>Manage credentials</td></tr></table></div><button class="collapsiblemygs">Chat Features</button> <div class="content"><h4>Input</h4>
-<table><tr><th>Shortcut</th><th>Action</th></tr>
-<tr><td><kbd>Tab</kbd> (empty)</td><td>Toggle Plan↔Build mode</td></tr>
-<tr><td><kbd>Shift+Enter</kbd></td><td>Newline (multiline)</td></tr>
-<tr><td><code>@path/file</code></td><td>Inject file content</td></tr>
-<tr><td><code>@"path with spaces"</code></td><td>Quoted file ref</td></tr>
-<tr><td><code>\</code> at EOL (plain)</td><td>Continue next line</td></tr></table>
-<h4>Commands</h4>
-<table><tr><th>Command</th><th>Action</th></tr>
-<tr><td><code>/use &lt;prov&gt;</code></td><td>Switch provider</td></tr>
-<tr><td><code>/model &lt;name&gt;</code></td><td>Switch model</td></tr>
-<tr><td><code>/compact</code></td><td>Free context window</td></tr>
-<tr><td><code>/sub &lt;task&gt;</code></td><td>Spawn sub-agent</td></tr>
-<tr><td><code>/ask &lt;agent&gt; &lt;task&gt;</code></td><td>Delegate externally</td></tr>
-<tr><td><code>/undo</code> / <code>/redo</code></td><td>Revert/restore actions + files</td></tr>
-<tr><td><code>/start-telegram</code></td><td>Transfer to phone</td></tr></table></div><button class="collapsiblemygs">Fellowship — Per-Agent Routers</button> <div class="content"><p>Each agent has its <strong>own router model</strong> — different speed/cost tradeoffs per agent.</p><div class="scomp-mermaid-card">
-<pre class="mermaid">graph LR
-    U[User Request] --> T{Trigger Match?}
-    T -->|design,plan| AR1[Architect Router<br/>Gemini Flash]
-    T -->|implement,fix| AR2[Coder Router<br/>local qwen-1.5b]
-    T -->|review,check| AR3[Reviewer Router<br/>Claude Haiku]
-    T -->|no match| GR[Global Fallback]
-    AR1 -->|≥70%| A1[Architect<br/>Gemini Pro]
-    AR2 -->|≥60%| A2[Coder<br/>Groq Llama 70B]
-    AR3 -->|≥70%| A3[Reviewer<br/>Claude Sonnet]
-    GR --> BEST[Best Agent]</pre>
-</div><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<pre ><code class="language-yaml"># .mithril/fellowship.yaml
-name: &quot;gemini-plan-kiro-build&quot;
-
-router:  # global fallback
-  provider: gemini
-  model: gemini-3.6-flash
-  confidence_threshold: 0.9
-
-agents:
-  - name: &quot;architect&quot;
-    provider: gemini
-    model: gemini-2.5-pro
-    role: &quot;Designs solutions, analyzes problems&quot;
-    router:
-      provider: gemini
-      model: gemini-3.6-flash
-      trigger: &quot;design|plan|architecture|refactor&quot;
-      confidence_threshold: 0.7
-    tools: [&quot;read_psi&quot;, &quot;grep_files&quot;, &quot;search_symbols&quot;]
-    can_delegate_to: [&quot;coder&quot;]
-
-  - name: &quot;coder&quot;
-    provider: groq
-    model: llama-3.3-70b-versatile
-    role: &quot;Fast code implementer&quot;
-    router:
-      provider: local
-      model: qwen-1.5b
-      trigger: &quot;implement|write|fix|edit|test&quot;
-      confidence_threshold: 0.6
-    tools: [&quot;*&quot;]
-
-  - name: &quot;executor&quot;
-    type: external
-    binary: kiro-cli
-    args: [&quot;chat&quot;, &quot;--trust-all-tools&quot;]
-    role: &quot;External execution via Kiro CLI&quot;
-    router:
-      provider: gemini
-      model: gemini-3.6-flash
-      trigger: &quot;run|deploy|build|execute&quot;
-      confidence_threshold: 0.7</code></pre>
-</div></div><button class="collapsiblemygs">Permissions & Safety</button> <div class="content"><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<pre ><code class="language-yaml"># ~/.mithril/config.yaml
-permissions:
-  run_terminal: allow    # Never ask
-  delete_file: deny      # Completely disabled
-  write_file: ask        # Confirm each time
-
-# Bypass for a session:
-mithril chat --no-confirm</code></pre>
-</div><table><tr><th>Level</th><th>Behavior</th></tr>
-<tr><td><code>allow</code></td><td>Execute immediately</td></tr>
-<tr><td><code>ask</code></td><td>Prompt user [y/N]</td></tr>
-<tr><td><code>deny</code></td><td>Tool disabled (LLM gets error)</td></tr></table>
-<p><strong>Sandbox:</strong> Blocks rm -rf /, sudo, fork bombs. <strong>Credentials:</strong> Argon2id + AES-256-GCM.</p></div><button class="collapsiblemygs">Flow System</button> <div class="content"><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<pre ><code class="language-yaml"># .mithril-flow.yaml
-version: &quot;1.0&quot;
-name: &quot;Gemini + Tools&quot;
-max_iterations: 10
-planner:
-  name: &quot;Gemini&quot;
-  provider: gemini
-  tools: [read_psi, write_file, edit_file, apply_patch,
-          grep_files, run_terminal, git_status, git_diff]</code></pre>
-</div><p><strong>Algorithm:</strong> Planner → tools → execute → feed results → repeat (up to max_iterations)</p><pre><code>mithril flow "refactor auth to use traits"</code></pre></div><button class="collapsiblemygs">Integration</button> <div class="content"><table><tr><th>Client</th><th>Method</th></tr>
-<tr><td>Junie / Kiro</td><td>Ollama API + MCP stdio</td></tr>
-<tr><td>Open WebUI</td><td>Ollama API (localhost:16180)</td></tr>
-<tr><td>Claude Desktop</td><td>MCP stdio</td></tr>
-<tr><td>LangChain / Cursor</td><td>OpenAI API (/v1/)</td></tr>
-<tr><td>Telegram</td><td>SharedSession handoff</td></tr>
-<tr><td>scomp-link</td><td>15 ML tools via MCP</td></tr></table><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<pre ><code class="language-json">// .kiro/mcp.json
-{
-  &quot;mcpServers&quot;: {
-    &quot;mithril&quot;: {&quot;command&quot;: &quot;mithril&quot;, &quot;args&quot;: [&quot;mcp-stdio&quot;]},
-    &quot;scomp-link&quot;: {&quot;command&quot;: &quot;scomp-link&quot;, &quot;args&quot;: [&quot;mcp&quot;]}
-  }
+<h4>The Interface Contract</h4>
+<pre ><code class="language-rust">pub trait ChatProvider: Send + Sync {
+    /// Provider identifier (e.g. &quot;gemini&quot;, &quot;openai&quot;)
+    fn name(&amp;self) -&gt; &amp;str;
+    
+    /// Model being used (e.g. &quot;gemini-2.5-flash&quot;, &quot;gpt-4o&quot;)
+    fn model(&amp;self) -&gt; &amp;str;
+    
+    /// Simple chat: send messages, get full response back
+    async fn chat(&amp;self, messages: &amp;[ChatMessage]) -&gt; Result&lt;String&gt;;
+    
+    /// Streaming chat: tokens arrive one by one via a channel
+    async fn chat_stream(
+        &amp;self, messages: &amp;[ChatMessage], tx: Sender&lt;String&gt;
+    ) -&gt; Result&lt;String&gt;;
+    
+    /// Chat with function calling: send tools + messages, get back
+    /// either a text response OR a list of tool calls to execute
+    async fn chat_with_tools(
+        &amp;self, messages: &amp;[ChatMessage], tools: &amp;[ToolDefinition]
+    ) -&gt; Result&lt;ChatResponse&gt;;
+    
+    /// Health check: is the API reachable and key valid?
+    async fn is_available(&amp;self) -&gt; bool;
 }</code></pre>
-</div></div><button class="collapsiblemygs">All 36 MCP Tools</button> <div class="content"><h4>Mithril (21)</h4>
-<table><tr><th>#</th><th>Tool</th><th>Description</th></tr>
-<tr><td>1-5</td><td>read_psi, write_file, edit_file, delete_file, apply_patch</td><td>File operations</td></tr>
-<tr><td>6</td><td>run_terminal</td><td>Shell (sandboxed)</td></tr>
-<tr><td>7-8</td><td>web_search, fetch_page</td><td>Web</td></tr>
-<tr><td>9-12</td><td>list_files, grep_files, find_file, file_stats</td><td>Project scan</td></tr>
-<tr><td>13-17</td><td>git_status/log/diff/blame/branch</td><td>Git</td></tr>
-<tr><td>18-19</td><td>search_symbols, document_outline</td><td>Code intelligence</td></tr>
-<tr><td>20-21</td><td>lore_write, lore_read</td><td>Persistent memory</td></tr></table>
-<h4>scomp-link (15)</h4>
-<table><tr><th>Tool</th><th>Description</th></tr>
-<tr><td>train_model</td><td>Train regression/classification</td></tr>
-<tr><td>predict</td><td>Generate predictions</td></tr>
-<tr><td>validate_model</td><td>Evaluate + report</td></tr>
-<tr><td>detect_drift / detect_anomalies</td><td>Monitoring</td></tr>
-<tr><td>check_fairness</td><td>Bias metrics</td></tr>
-<tr><td>forecast_series</td><td>Time series</td></tr>
-<tr><td>engineer_features</td><td>Auto feature eng</td></tr>
-<tr><td>cluster_data</td><td>Clustering</td></tr>
-<tr><td>generate_report / create_visualization</td><td>Reports & charts</td></tr>
-<tr><td>compare_models / export_model</td><td>Model management</td></tr>
-<tr><td>describe_data / tune_model</td><td>Profiling & tuning</td></tr></table></div>
+</div><button class="collapsiblemygs">chat() — Simple Request/Response</button> <div class="content"><p>
+        <h3>What it does</h3>
+        <p>Takes a conversation history (list of messages with roles: system, user, assistant) and returns
+        the model's complete response as a single string.</p>
+        
+        <h3>The flow (same for ALL providers)</h3>
+        <ol>
+            <li><strong>Convert messages</strong> to the provider's native format</li>
+            <li><strong>Build HTTP request</strong> with auth headers and JSON payload</li>
+            <li><strong>POST</strong> to the provider's API endpoint</li>
+            <li><strong>Parse response</strong> — extract the assistant's text from the provider-specific JSON</li>
+            <li><strong>Return</strong> the text as a String</li>
+        </ol>
+        
+        <h3>What differs per provider</h3>
+    </p><a href="#" onclick="download_table_as_csv('chat_comparison');">Download as CSV</a>
+            <div id="table-wrapper">
+                <div id="table-scroll">
+                    <table border="0" id="chat_comparison" class="scomp-table">
+  <thead>
+    <tr style="text-align: left;">
+      <th>Provider</th>
+      <th>Message Format</th>
+      <th>Auth</th>
+      <th>Endpoint</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Gemini</td>
+      <td>contents[{role, parts[{text}]}]</td>
+      <td>?key= in URL</td>
+      <td>generativelanguage.googleapis.com</td>
+    </tr>
+    <tr>
+      <td>OpenAI</td>
+      <td>messages[{role, content}]</td>
+      <td>Bearer token header</td>
+      <td>api.openai.com/v1/chat/completions</td>
+    </tr>
+    <tr>
+      <td>Anthropic</td>
+      <td>messages[] + system separate</td>
+      <td>x-api-key header</td>
+      <td>api.anthropic.com/v1/messages</td>
+    </tr>
+    <tr>
+      <td>Groq</td>
+      <td>messages[{role, content}] (OpenAI-compatible)</td>
+      <td>Bearer token header</td>
+      <td>api.groq.com/openai/v1/chat/completions</td>
+    </tr>
+    <tr>
+      <td>Local</td>
+      <td>Direct token generation (no HTTP)</td>
+      <td>N/A</td>
+      <td>In-process GGUF inference</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+            </div>
+            <style>
+                .scomp-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                    font-family: inherit;
+                }
+                .scomp-table thead tr {
+                    background-color: #6E37FA !important;
+                    color: white !important;
+                    text-align: left;
+                }
+                .scomp-table th {
+                    color: white !important;
+                    background-color: #6E37FA !important;
+                }
+                .scomp-table th, .scomp-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                .scomp-table tbody tr:nth-child(even) {
+                    background-color: #f8f9fa;
+                }
+                .scomp-table tbody tr:hover {
+                    background-color: #9682FF22;
+                }
+            </style></div><button class="collapsiblemygs">chat_stream() — Token-by-Token Streaming</button> <div class="content"><p>
+        <h3>What it does</h3>
+        <p>Same as <code>chat()</code> but tokens arrive one by one as they're generated. 
+        Used by the TUI and API to show responses in real-time.</p>
+        
+        <h3>The flow</h3>
+        <ol>
+            <li><strong>Same request building</strong> as chat(), but add <code>"stream": true</code> to the payload</li>
+            <li><strong>Open SSE connection</strong> — server sends chunks as Server-Sent Events</li>
+            <li><strong>For each chunk:</strong> parse the delta token, send it through the <code>tx</code> channel</li>
+            <li><strong>Accumulate</strong> all tokens into the final complete response</li>
+            <li><strong>Return</strong> the full text (the caller also got each token via the channel)</li>
+        </ol>
+        
+        <h3>What differs per provider</h3>
+        <ul>
+            <li><strong>Gemini:</strong> Uses <code>?alt=sse</code> query param and a different endpoint path (<code>streamGenerateContent</code>)</li>
+            <li><strong>OpenAI/Groq:</strong> Standard SSE with <code>data: {json}</code> lines. Delta in <code>choices[0].delta.content</code></li>
+            <li><strong>Anthropic:</strong> SSE with event types: <code>content_block_delta</code> contains the token</li>
+            <li><strong>Local:</strong> Tokens come from llama.cpp one by one via callback (no HTTP, no SSE)</li>
+        </ul>
+    </p></div><button class="collapsiblemygs">chat_with_tools() — Function Calling / Tool Use</button> <div class="content"><p>
+        <h3>What it does</h3>
+        <p>Sends messages + a list of available tools. The model can either respond with text OR 
+        request that specific tools be executed with specific arguments.</p>
+        
+        <h3>The flow</h3>
+        <ol>
+            <li><strong>Convert tool definitions</strong> to the provider's native format (JSON Schema for most)</li>
+            <li><strong>Add tools to the request</strong> payload alongside messages</li>
+            <li><strong>POST</strong> to the provider</li>
+            <li><strong>Parse response:</strong> check if it's a text reply or tool_calls</li>
+            <li><strong>If tool_calls:</strong> return structured <code>ToolCall {name, arguments}</code> objects</li>
+            <li><strong>If text:</strong> return the text response directly</li>
+        </ol>
+        
+        <h3>What differs per provider</h3>
+    </p><a href="#" onclick="download_table_as_csv('tools_comparison');">Download as CSV</a>
+            <div id="table-wrapper">
+                <div id="table-scroll">
+                    <table border="0" id="tools_comparison" class="scomp-table">
+  <thead>
+    <tr style="text-align: left;">
+      <th>Provider</th>
+      <th>Tool Format</th>
+      <th>Response Location</th>
+      <th>Parallel Calls</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Gemini</td>
+      <td>functionDeclarations[{name, parameters}]</td>
+      <td>candidates[0].content.parts[].functionCall</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>OpenAI</td>
+      <td>tools[{type:function, function:{name, parameters}}]</td>
+      <td>choices[0].message.tool_calls[]</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Anthropic</td>
+      <td>tools[{name, input_schema}]</td>
+      <td>content[].type == tool_use</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Groq</td>
+      <td>tools[] (same as OpenAI)</td>
+      <td>choices[0].message.tool_calls[]</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Local</td>
+      <td>Grammar-constrained JSON output</td>
+      <td>Parsed from model text output</td>
+      <td>No (sequential)</td>
+    </tr>
+  </tbody>
+</table>
+                </div>
+            </div>
+            <style>
+                .scomp-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                    font-family: inherit;
+                }
+                .scomp-table thead tr {
+                    background-color: #6E37FA !important;
+                    color: white !important;
+                    text-align: left;
+                }
+                .scomp-table th {
+                    color: white !important;
+                    background-color: #6E37FA !important;
+                }
+                .scomp-table th, .scomp-table td {
+                    padding: 10px 12px;
+                    border-bottom: 1px solid #e0e0e0;
+                }
+                .scomp-table tbody tr:nth-child(even) {
+                    background-color: #f8f9fa;
+                }
+                .scomp-table tbody tr:hover {
+                    background-color: #9682FF22;
+                }
+            </style></div><button class="collapsiblemygs">How to Add a New Provider — Template</button> <div class="content"><p>
+        <p>To add a new LLM provider (e.g. Mistral, Cohere, DeepSeek cloud), follow this template.
+        Create a new file <code>src/providers/your_provider.rs</code>:</p>
+    </p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>New Provider Template (copy and fill in)</h4>
+<pre ><code class="language-rust">use anyhow::Result;
+use async_trait::async_trait;
+use crate::providers::{ChatMessage, ChatProvider, ChatResponse, ToolDefinition};
+use tokio::sync::mpsc::Sender;
+
+pub struct YourProvider {
+    api_key: String,
+    model: String,
+    client: reqwest::Client,
+}
+
+impl YourProvider {
+    pub fn new(api_key: String, model: &amp;str) -&gt; Self {
+        Self {
+            api_key,
+            model: model.to_string(),
+            client: reqwest::Client::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl ChatProvider for YourProvider {
+    fn name(&amp;self) -&gt; &amp;str { &quot;your_provider&quot; }
+    fn model(&amp;self) -&gt; &amp;str { &amp;self.model }
+
+    async fn chat(&amp;self, messages: &amp;[ChatMessage]) -&gt; Result&lt;String&gt; {
+        // 1. Convert messages to your API&#x27;s format
+        let payload = build_payload(messages);
+        
+        // 2. POST to your API
+        let response = self.client
+            .post(&quot;https://api.yourprovider.com/v1/chat&quot;)
+            .bearer_auth(&amp;self.api_key)
+            .json(&amp;payload)
+            .send().await?
+            .error_for_status()?
+            .json::&lt;YourResponse&gt;().await?;
+        
+        // 3. Extract and return the assistant&#x27;s text
+        Ok(response.choices[0].message.content.clone())
+    }
+
+    async fn chat_stream(
+        &amp;self, messages: &amp;[ChatMessage], tx: Sender&lt;String&gt;
+    ) -&gt; Result&lt;String&gt; {
+        // Same as chat() but with &quot;stream&quot;: true
+        // Read SSE chunks, send each token via tx.send(token)
+        // Return the full accumulated text
+        todo!(&quot;Implement streaming&quot;)
+    }
+
+    async fn chat_with_tools(
+        &amp;self, messages: &amp;[ChatMessage], tools: &amp;[ToolDefinition]
+    ) -&gt; Result&lt;ChatResponse&gt; {
+        // Same as chat() but include tool definitions in payload
+        // Parse response: if tool_calls present, return them
+        // Otherwise return text
+        todo!(&quot;Implement tool calling&quot;)
+    }
+
+    async fn is_available(&amp;self) -&gt; bool {
+        !self.api_key.is_empty()
+    }
+}</code></pre>
+</div><p>
+        <h3>Then register it in the factory (src/providers/mod.rs):</h3>
+    </p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>Factory Registration</h4>
+<pre ><code class="language-rust">// In create_provider_with_model():
+&quot;your_provider&quot; =&gt; {
+    let key = config.get_credential(&quot;your_provider&quot;)?
+        .ok_or_else(|| anyhow!(&quot;API key not set&quot;))?;
+    Ok(Box::new(YourProvider::new(key, model)))
+}</code></pre>
+</div><p>
+        <p><strong>That's it.</strong> The orchestrator, API layer, CLI, and TUI all work automatically 
+        with your new provider. No other files need changes.</p>
+    </p></div><button class="collapsiblemygs">Current DRY Violations (Known)</button> <div class="content"><p>
+        <ul>
+            <li><strong>HTTP boilerplate:</strong> Every cloud provider repeats: build_payload → client.post() → 
+                error_for_status() → parse. A shared helper could save ~40 lines per provider.</li>
+            <li><strong>Struct fields:</strong> api_key + model + client are identical across 4 providers.
+                <code>HttpProviderBase</code> exists but isn't used yet.</li>
+            <li><strong>Groq is 50% larger</strong> than others (436 vs ~280 LOC) without extra features.
+                Likely has verbose error handling that could be simplified.</li>
+        </ul>
+        <p>These are tracked in the refactoring roadmap. The architecture is correct — the duplication 
+        is cosmetic and doesn't affect functionality or extensibility.</p>
+    </p></div>
                             </div>
                             
                         <script>

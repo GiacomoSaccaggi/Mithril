@@ -2,7 +2,7 @@
 
 > *"Mithril! All folk desired it. It could be beaten like copper, and polished like glass; and the Dwarves could make of it a metal, light and yet harder than tempered steel."* — Gandalf
 
-**A lightweight standalone LLM inference engine forged in the depths of Khazad-dûm.** Single binary, no runtime dependencies. Serves GGUF models via Ollama-compatible API, OpenAI-compatible API, and MCP stdio — works with Junie, Open WebUI, LangChain, Claude Desktop, and any Ollama client.
+**A multi-model orchestration engine.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
 
 [![Build](https://img.shields.io/badge/build-cargo-orange)](https://doc.rust-lang.org/cargo/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -10,89 +10,117 @@
 
 ---
 
-## The Forging
+## What It Does
 
-Mithril is the backend engine powering [Celebrimbot](https://github.com/GiacomoSaccaggi/Celebrimbot) — ported from Kotlin/JVM to pure Rust. Like the legendary metal of the Dwarves, it is light yet stronger than steel: a single binary that serves local models and cloud providers alike.
+You define a **fellowship** — a team of AI models working together:
 
-```mermaid
-graph LR
-    subgraph "The Free Peoples"
-        A[Junie CLI]
-        B[Open WebUI]
-        C[LangChain]
-        D[Claude Desktop]
-        E[Telegram Bot]
-        F[IDE Plugins]
-    end
-    
-    subgraph "Khazad-dûm (Engine)"
-        M[Mithril :16180]
-    end
-    
-    subgraph "The Five Istari (Providers)"
-        G[GGUF Models]
-        H[Gemini]
-        I[OpenAI]
-        J[Anthropic]
-        K[Groq]
-    end
-    
-    A -->|Ollama API| M
-    B -->|Ollama API| M
-    C -->|OpenAI API| M
-    D -->|MCP stdio| M
-    E -->|SharedSession| M
-    F -->|Ollama API| M
-    M -->|llama.cpp| G
-    M -->|API| H
-    M -->|API| I
-    M -->|API| J
-    M -->|API| K
+```yaml
+# .mithril/fellowship.yaml
+name: "my-team"
+controller:
+  provider: local          # Free GGUF model routes requests
+  model: qwen-1.5b
+
+agents:
+  - name: coder
+    provider: gemini
+    model: gemini-2.5-flash
+    when: "coding tasks"
+    tools: ["*"]
+
+  - name: reviewer
+    provider: openai
+    model: gpt-4o
+    when: "code review requested"
+    tools: ["read_psi", "grep_files"]
+```
+
+Then you start the engine:
+
+```bash
+mithril serve
+```
+
+Now any Ollama-compatible client sees your fellowship as a model:
+
+```bash
+# From Junie, OpenCode, Open WebUI, or any Ollama client:
+curl http://localhost:16180/api/tags
+# → {"models": [{"name": "my-team:latest", "details": {"family": "mithril-fellowship"}}]}
 ```
 
 ---
 
-## Gifts of the Elves
+## Use Cases
 
-| Gift | Description |
-|------|-------------|
-| **Single Binary** | No JVM, no Python — one ring to rule them all |
-| **Cross-Platform** | macOS, Linux, Windows |
-| **Minas Tirith TUI** | Full ratatui terminal interface with splash animation |
-| **The Beacons** | Ollama `/api/*`, OpenAI `/v1/*`, MCP JSON-RPC endpoints |
-| **Five Istari** | Local GGUF + Gemini, OpenAI, Anthropic, Groq providers |
-| **The Armory** | 24 built-in MCP tools for file, git, web, and code operations |
-| **The Fellowship** | Multi-agent orchestration with GGUF classifier + NEXT/TASK protocol |
-| **@Agent Mentions** | Direct agent addressing in chat via `@worker`, `@reviewer` |
-| **Markdown Agents** | Define agents in `.mithril/agents/*.md` with natural language |
-| **Token Streaming** | True token-by-token via `mpsc` channel bridge |
-| **Palantír Index** | BM25 semantic search for fast project context retrieval |
-| **Shadow Log** | Automatic backup/undo for all file operations |
-| **Session Persistence** | Auto-titled sessions with handoff between Terminal, Telegram, Junie |
-| **Plan↔Build Mode** | Tab toggles between read-only analysis and full-access editing |
-| **Hooks & Formatters** | Pre/post hooks and output formatters in fellowship config |
-| **Custom Commands** | Define `/commands` in fellowship YAML |
-| **Lazy Loading** | Model loaded on first inference, auto-unloaded after idle |
-| **Metal GPU** | Automatic acceleration on Apple Silicon |
-| **Argon2id Vaults** | AES-256-GCM encrypted credentials with proper KDF |
-| **Terminal Sanctuary** | Dangerous commands blocked, path traversal prevented |
-| **Retry with Backoff** | Exponential backoff on provider failures |
-| **Token Budget** | Per-agent usage accounting and limits |
+| Use Case | How |
+|----------|-----|
+| **Backend for Junie** | Point Junie at `http://localhost:16180`, select your fellowship as the model |
+| **Backend for OpenCode** | Same — Ollama API compatible |
+| **Backend for Open WebUI** | Add as Ollama connection |
+| **Backend for LangChain** | Use OpenAI API at `http://localhost:16180/v1/chat/completions` |
+| **MCP server for Claude Desktop** | `mithril mcp-stdio` |
+| **Standalone CLI** | `mithril chat` — built-in terminal interface |
+| **Docker service for teams** | `docker compose up` — shared orchestration backend |
+| **Telegram bot** | `mithril telegram` — chat via Telegram with same fellowship |
 
 ---
 
-## Quick Start
+## Architecture
 
-> *"The road goes ever on and on, down from the door where it began."*
+```mermaid
+graph TB
+    subgraph "Clients (any Ollama/OpenAI consumer)"
+        J[Junie]
+        O[OpenCode]
+        W[Open WebUI]
+        L[LangChain]
+        C[Claude Desktop]
+        T[Telegram]
+        CLI[Mithril CLI]
+    end
 
-### One Command Installation
+    subgraph "Mithril Engine"
+        API[API Layer<br/>Ollama + OpenAI + MCP]
+        ORCH[Orchestrator<br/>GGUF Classifier → Agent Routing]
+        TOOLS[24 Built-in Tools<br/>File, Git, Web, Code, Terminal]
+    end
 
+    subgraph "Your Providers"
+        G[Gemini]
+        GPT[OpenAI]
+        A[Anthropic]
+        GR[Groq]
+        LOCAL[Local GGUF]
+    end
+
+    J -->|Ollama API| API
+    O -->|Ollama API| API
+    W -->|Ollama API| API
+    L -->|OpenAI API| API
+    C -->|MCP stdio| API
+    T -->|Internal| API
+    CLI -->|Internal| API
+
+    API --> ORCH
+    ORCH --> G
+    ORCH --> GPT
+    ORCH --> A
+    ORCH --> GR
+    ORCH --> LOCAL
+    ORCH --> TOOLS
+```
+
+---
+
+## Installation
+
+### One-liner
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
 ```
 
-### Manual Installation
-
+### Manual
 ```bash
 # macOS (Apple Silicon)
 curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-macos-arm64.tar.gz | tar xz
@@ -101,205 +129,185 @@ sudo mv mithril /usr/local/bin/
 # Linux (x86_64)
 curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-linux-x64.tar.gz | tar xz
 sudo mv mithril /usr/local/bin/
+```
 
-# Build from source
+### Docker
+```bash
+git clone https://github.com/GiacomoSaccaggi/mithril.git
+cd mithril
+docker compose up -d
+# API available at http://localhost:16180
+```
+
+### Build from source
+```bash
 git clone https://github.com/GiacomoSaccaggi/mithril.git
 cd mithril && cargo build --release
 ```
 
-### First Journey
+---
+
+## Quick Start
+
+### 1. Configure providers
 
 ```bash
-# Configure a provider (keys stored encrypted)
+# API keys — stored encrypted with Argon2id + AES-256-GCM
 mithril config set gemini "AIza..."
+mithril config set openai "sk-..."
 
-# Begin your quest
-mithril start
+# Or via environment variables (for Docker/CI):
+export MITHRIL_KEY_GEMINI="AIza..."
+export MITHRIL_KEY_OPENAI="sk-..."
+```
+
+### 2. Create a fellowship
+
+```bash
+mithril fellowship init
+# Creates .mithril/fellowship.yaml with sensible defaults
+```
+
+### 3. Start the engine
+
+```bash
+mithril serve
+# → http://localhost:16180 (Ollama + OpenAI + MCP)
+```
+
+### 4. Connect your tools
+
+**Junie / OpenCode / Open WebUI:**
+- Ollama URL: `http://localhost:16180`
+- Model: select your fellowship name from the list
+
+**LangChain / custom:**
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:16180/v1", api_key="unused")
+response = client.chat.completions.create(
+    model="my-team",
+    messages=[{"role": "user", "content": "Review this code"}]
+)
 ```
 
 ---
 
-## The Fellowship System
+## Credentials in Docker
 
-> *"I will take the Ring, though I do not know the way."*
+Mithril reads API keys in this priority order:
 
-Every `mithril chat` session is orchestrated by a Fellowship — a multi-agent system defined in `.mithril/fellowship.yaml`:
+1. **Environment variables** (recommended for Docker): `MITHRIL_KEY_<PROVIDER>`
+2. **Encrypted config file**: `~/.mithril/config.yaml` (used by CLI)
+
+```bash
+# Docker Compose — set in .env file or environment:
+MITHRIL_KEY_GEMINI=AIza...
+MITHRIL_KEY_OPENAI=sk-...
+MITHRIL_KEY_ANTHROPIC=sk-ant-...
+MITHRIL_KEY_GROQ=gsk_...
+```
+
+No secrets are stored in the Docker image. Mount `.mithril/fellowship.yaml` for your agent configuration.
+
+---
+
+## Fellowship Configuration
+
+A fellowship defines **who does what**:
 
 ```yaml
-name: "fellowship-of-code"
-description: "A company of agents united in purpose"
+name: "code-team"
+description: "Multi-model coding assistant"
 
 controller:
-  provider: local
+  provider: local         # Routes requests (free, fast)
   model: qwen-1.5b
-  context_window: 2
-
-max_rounds: 15
-token_budget: 50000
+  context_window: 2       # Messages the router sees
 
 agents:
-  - name: "worker"
+  - name: worker
     provider: gemini
     model: gemini-2.5-flash
-    role: "Swift executor of tasks"
-    when: "any task requiring action"
-    can_call: ["reviewer", "gguf"]
-    tools: ["*"]
+    role: "Fast coder — implements features"
+    when: "any coding task"
+    can_call: [reviewer]
+    tools: ["*"]           # All 24 tools
 
-  - name: "reviewer"
-    provider: gemini
-    model: gemini-2.5-pro
-    role: "Wise counsel for complex matters"
-    when: "explicit review request"
-    can_call: ["worker"]
-    tools: ["read_file", "grep_files", "git_diff"]
+  - name: reviewer
+    provider: openai
+    model: gpt-4o
+    role: "Senior reviewer — catches bugs"
+    when: "review requested or complex logic"
+    can_call: []
+    tools: [read_psi, grep_files, git_diff]
 ```
 
-### Agent Communication Protocol
-
-Agents speak through the NEXT/TASK protocol:
-
-| Protocol | Meaning |
-|----------|---------|
-| `NEXT: DONE` | Quest complete — return to the user |
-| `NEXT: agent_name` | Pass the torch to another agent |
-| `TASK: description` | The burden to carry forward |
-
-### @Agent Mentions
-
-Address agents directly in your messages:
-
-```
-@reviewer please check my changes to auth.rs
-@worker implement the fix that reviewer suggested
-```
-
-### Markdown Agents
-
-Define agents in natural language at `.mithril/agents/loremaster.md`:
-
-```markdown
-# Loremaster
-
-You are the keeper of project knowledge. You excel at:
-- Explaining complex code
-- Finding relevant documentation
-- Answering questions about architecture
-```
+Agents communicate via the NEXT/TASK protocol:
+- `NEXT: DONE` — task complete, return to user
+- `NEXT: reviewer` + `TASK: check auth.rs` — delegate to another agent
 
 ---
 
-## The Sixteen Commands
+## The CLI (Optional)
 
-| Command | Purpose |
-|---------|---------|
-| `mithril start` | Server + chat in one command |
-| `mithril serve` | HTTP server only |
-| `mithril chat` | Interactive TUI (or `--plain` for REPL) |
-| `mithril exec` | Non-interactive execution for scripts |
-| `mithril flow` | Run agentic Planner→Tools loop |
-| `mithril fellowship` | Multi-agent orchestration |
-| `mithril fellowships` | List available fellowships |
-| `mithril forge` | Single inference and print |
-| `mithril init` | Generate MITHRIL.md steering file |
-| `mithril scan` | Build Palantír BM25 index |
-| `mithril config` | Manage credentials and settings |
-| `mithril download-model` | Download GGUF models |
-| `mithril mcp-stdio` | MCP server over stdin/stdout |
-| `mithril telegram` | Start Telegram bot frontend |
-| `mithril sessions` | Manage saved sessions |
-| `mithril undo` | Undo last shadow log session |
+Mithril includes a full-featured terminal interface:
 
----
+```bash
+mithril chat              # Interactive REPL with Tab completion
+mithril chat --tui        # Full-screen TUI with panels
+mithril exec "fix bug"    # Non-interactive (for CI/scripts)
+```
 
-## The Armory (24 Tools)
+Features: `@file` expansion, `#agent` routing, `/commands`, Plan/Build modes, undo/redo, session persistence, custom commands, hooks.
 
-> *"It's a dangerous business, going out your door."*
-
-### File Operations
-`read_file`, `write_file`, `edit_file`, `delete_file`, `apply_patch`
-
-### Terminal
-`run_terminal` (with sanctuary protection)
-
-### Discovery
-`list_files`, `grep_files`, `find_file`, `file_stats`
-
-### Git Mastery
-`git_status`, `git_log`, `git_diff`, `git_blame`, `git_branch`, `git_commit`
-
-### Web Scouting
-`web_search`, `fetch_page`
-
-### Code Intelligence
-`search_symbols`, `document_outline`
-
-### Project Lore
-`lore_write`, `lore_read`
-
-### Session Control
-`share_session`
-
----
-
-## Documentation
-
-> *"All we have to decide is what to do with the time that is given us."*
-
-| Scroll | Contents |
-|--------|----------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The realms of Mithril: Khazad-dûm, Rivendell, Minas Tirith |
-| [docs/TOOLS.md](docs/TOOLS.md) | The twenty-four weapons of the Armory |
-| [docs/CLI.md](docs/CLI.md) | Commands, /chat commands, @mentions, custom commands |
-| [docs/SECURITY.md](docs/SECURITY.md) | The defenses of the realm |
-| [docs/SESSION.md](docs/SESSION.md) | Session persistence and handoff |
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | The Five Istari (providers) |
-| [docs/ENGINE.md](docs/ENGINE.md) | Khazad-dûm depths: LazyModelManager, streaming |
-| [docs/API.md](docs/API.md) | The Beacons: HTTP endpoints |
-| [docs/OPERATORS.md](docs/OPERATORS.md) | The Rangers: file, git, web operators |
-| [docs/INDEX.md](docs/INDEX.md) | The Palantír: BM25 semantic index |
-| [docs/TOKEN_EFFICIENCY.md](docs/TOKEN_EFFICIENCY.md) | Wisdom in token usage |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Join the Fellowship |
+See [docs/CLI.md](docs/CLI.md) for details.
 
 ---
 
 ## API Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Health check |
-| `GET /api/tags` | List models |
-| `POST /api/chat` | Chat completion (Ollama) |
-| `POST /api/generate` | Text generation (Ollama) |
-| `POST /v1/chat/completions` | Chat completion (OpenAI) |
-| `GET /v1/models` | Model list (OpenAI) |
-| `POST /mcp` | MCP JSON-RPC 2.0 |
+| Endpoint | Protocol | Use |
+|----------|----------|-----|
+| `GET /health` | — | Health check |
+| `GET /api/tags` | Ollama | List models (includes fellowships) |
+| `POST /api/chat` | Ollama | Chat completion |
+| `POST /api/generate` | Ollama | Text generation |
+| `POST /v1/chat/completions` | OpenAI | Chat completion |
+| `GET /v1/models` | OpenAI | List models |
+| `POST /mcp` | MCP | JSON-RPC tool calls |
 
 ---
 
-## Prerequisites
+## 24 Built-in Tools
 
-### macOS
-```bash
-brew install cmake && xcode-select --install
-```
+File: `read_file`, `write_file`, `edit_file`, `delete_file`, `apply_patch`
+Terminal: `run_terminal` (sandboxed)
+Discovery: `list_files`, `grep_files`, `find_file`, `file_stats`, `glob_files`
+Git: `git_status`, `git_log`, `git_diff`, `git_blame`, `git_branch`
+Web: `web_search`, `fetch_page`
+Code: `search_symbols`, `document_outline`
+Knowledge: `lore_write`, `lore_read`
+Interaction: `todo_write`, `question`
 
-### Linux
-```bash
-sudo apt install build-essential cmake
-```
+---
 
-### Rust
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and module map |
+| [docs/TOOLS.md](docs/TOOLS.md) | All 24 tools with parameters |
+| [docs/CLI.md](docs/CLI.md) | Terminal commands and features |
+| [docs/API.md](docs/API.md) | HTTP endpoints reference |
+| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Provider configuration |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security model |
+| [docs/SESSION.md](docs/SESSION.md) | Session persistence |
+| [docs/ENGINE.md](docs/ENGINE.md) | GGUF inference engine |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Join the Fellowship |
 
 ---
 
 ## License
 
 MIT
-
----
-
-> *"Even the smallest person can change the course of the future."*

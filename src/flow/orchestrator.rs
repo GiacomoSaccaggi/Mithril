@@ -30,7 +30,8 @@ use colored::Colorize;
 
 use crate::config::MithrilConfig;
 use crate::providers::{self, ChatMessage, ChatProvider};
-use crate::cli::agent_loop::{self, TraceMode};
+use crate::flow::{self, TraceMode};
+use super::agent_loop;
 
 use super::fellowship::*;
 use super::tokens::*;
@@ -169,14 +170,14 @@ impl Orchestrator {
         Ok(matched.unwrap_or_else(|| self.config.agents[0].name.clone()))
     }
 
-    /// Check if user message starts with @agentname and extract the agent name.
+    /// Check if user message starts with #agentname and extract the agent name.
     /// Returns Some(agent_name) if a valid agent is mentioned, None otherwise.
     fn extract_agent_mention(&self, message: &str) -> Option<String> {
         let trimmed = message.trim();
-        if !trimmed.starts_with('@') {
+        if !trimmed.starts_with('#') {
             return None;
         }
-        // Extract the word after @
+        // Extract the word after #
         let mention = trimmed[1..].split_whitespace().next()?;
         let mention_lower = mention.to_lowercase();
 
@@ -352,11 +353,11 @@ impl Orchestrator {
                     "git_status", "git_log", "git_diff", "git_blame", "git_branch",
                     "search_symbols", "document_outline", "web_search", "fetch_page", "lore_read",
                 ];
-                agent_loop::build_tool_defs(&registry).into_iter()
+                flow::build_tool_defs(&registry).into_iter()
                     .filter(|t| PLAN_TOOLS.contains(&t.name.as_str()))
                     .collect()
             } else {
-                agent_loop::build_tool_defs(&registry)
+                flow::build_tool_defs(&registry)
             };
 
             let result = agent_loop::run_agentic_loop(
@@ -434,11 +435,11 @@ impl Orchestrator {
                 "git_status", "git_log", "git_diff", "git_blame", "git_branch",
                 "search_symbols", "document_outline", "web_search", "fetch_page", "lore_read",
             ];
-            agent_loop::build_tool_defs(&registry).into_iter()
+            flow::build_tool_defs(&registry).into_iter()
                 .filter(|t| PLAN_TOOLS.contains(&t.name.as_str()))
                 .collect()
         } else {
-            agent_loop::build_tool_defs(&registry)
+            flow::build_tool_defs(&registry)
         };
 
         let mut messages = vec![
@@ -480,33 +481,59 @@ impl Orchestrator {
 // ── Protocol parsing ─────────────────────────────────────────────────────────
 
 fn parse_agent_directive(output: &str) -> Directive {
-    // Look for the LAST occurrence of NEXT: (in case the agent mentions it in prose earlier)
-    let next_value = output.lines().rev()
-        .find(|l| l.trim().starts_with("NEXT:"))
-        .map(|l| l.trim().strip_prefix("NEXT:").unwrap_or("").trim().to_string());
+    let lines: Vec<&str> = output.lines().collect();
+    
+    // Find the last NEXT: line
+    let next_idx = lines.iter().rposition(|l| l.trim().starts_with("NEXT:"));
+    let next_idx = match next_idx {
+        Some(i) => i,
+        None => return Directive::None,
+    };
 
-    match next_value.as_deref() {
-        Some(val) if val.eq_ignore_ascii_case("DONE") => {
-            // Extract RESPONSE: or everything before NEXT:
-            let response = output.lines().rev()
-                .find(|l| l.trim().starts_with("RESPONSE:"))
-                .map(|l| l.trim().strip_prefix("RESPONSE:").unwrap_or("").trim().to_string())
-                .unwrap_or_else(|| {
-                    // Everything before the last NEXT: line
-                    let parts: Vec<&str> = output.rsplitn(2, "NEXT:").collect();
-                    parts.last().unwrap_or(&output).trim().to_string()
-                });
-            Directive::Done(response)
-        }
-        Some(name) if !name.is_empty() => {
-            // Extract TASK: 
-            let task = output.lines().rev()
-                .find(|l| l.trim().starts_with("TASK:"))
-                .map(|l| l.trim().strip_prefix("TASK:").unwrap_or("").trim().to_string())
-                .unwrap_or_else(|| output.to_string());
-            Directive::CallAgent { name: name.to_lowercase(), task }
-        }
-        _ => Directive::None,
+    let next_value = lines[next_idx].trim().strip_prefix("NEXT:").unwrap_or("").trim();
+
+    if next_value.eq_ignore_ascii_case("DONE") {
+        // Look for RESPONSE: anywhere in the output
+        let response_idx = lines.iter().position(|l| l.trim().starts_with("RESPONSE:"));
+
+        let response = if let Some(r_i) = response_idx {
+            // Take RESPONSE: content + everything after it (excluding NEXT: lines)
+            let first = lines[r_i].trim().strip_prefix("RESPONSE:").unwrap_or("").trim();
+            let mut parts: Vec<&str> = vec![first];
+            for line in &lines[r_i + 1..] {
+                if !line.trim().starts_with("NEXT:") {
+                    parts.push(line);
+                }
+            }
+            parts.join("\n").trim().to_string()
+        } else {
+            // No RESPONSE: — take everything BEFORE the NEXT: line
+            lines[..next_idx].join("\n").trim().to_string()
+        };
+
+        Directive::Done(response)
+    } else if !next_value.is_empty() {
+        // Agent delegation — look for TASK: anywhere in output
+        let task_idx = lines.iter().position(|l| l.trim().starts_with("TASK:"));
+
+        let task = if let Some(t_i) = task_idx {
+            // Take TASK: content + everything after it (excluding NEXT: lines)
+            let first = lines[t_i].trim().strip_prefix("TASK:").unwrap_or("").trim();
+            let mut parts: Vec<&str> = vec![first];
+            for line in &lines[t_i + 1..] {
+                if !line.trim().starts_with("NEXT:") {
+                    parts.push(line);
+                }
+            }
+            parts.join("\n").trim().to_string()
+        } else {
+            // No TASK: — use full output
+            output.to_string()
+        };
+
+        Directive::CallAgent { name: next_value.to_lowercase(), task }
+    } else {
+        Directive::None
     }
 }
 
@@ -550,7 +577,12 @@ fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAg
          - Use NEXT: gguf for trivial sub-tasks (saves money)\n\
          - Only call agents you actually need\n\
          - Be concise in TASK: descriptions\n\
-         - If you can complete the task yourself, do it and say NEXT: DONE",
+         - If you can complete the task yourself, do it and say NEXT: DONE\n\
+\
+         ## Output Formatting\n\
+         You are running inside a terminal. Do NOT use markdown.\n\
+         No code fences, no bold markers, no heading markers.\n\
+         Use plain text. For lists use bullet points. For code indent with spaces.",
         agent.name, agent.role, can_call_section
     )
 }
@@ -762,4 +794,84 @@ mod tests {
             _ => panic!("Expected CallAgent"),
         }
     }
+    #[test]
+    fn test_parse_directive_multiline_response() {
+        let output = "Here are the files:\n- src/main.rs\n- src/lib.rs\n\nNEXT: DONE";
+        match parse_agent_directive(output) {
+            Directive::Done(r) => {
+                assert!(r.contains("src/main.rs"));
+                assert!(r.contains("src/lib.rs"));
+            }
+            _ => panic!("Expected Done with multiline response"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_empty_response() {
+        let output = "NEXT: DONE";
+        match parse_agent_directive(output) {
+            Directive::Done(r) => assert!(r.is_empty()),
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_response_after_next() {
+        let output = "NEXT: DONE\nRESPONSE: The fix is applied.";
+        match parse_agent_directive(output) {
+            Directive::Done(r) => assert_eq!(r, "The fix is applied."),
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_multiline_response_after_next() {
+        let output = "NEXT: DONE\nRESPONSE: Here are the results:\n- Item 1\n- Item 2";
+        match parse_agent_directive(output) {
+            Directive::Done(r) => {
+                assert!(r.contains("Item 1"));
+                assert!(r.contains("Item 2"));
+            }
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_task_multiline() {
+        let output = "I need help.\nNEXT: worker\nTASK: Do these things:\n1. Read the file\n2. Fix the bug";
+        match parse_agent_directive(output) {
+            Directive::CallAgent { name, task } => {
+                assert_eq!(name, "worker");
+                assert!(task.contains("Read the file"));
+                assert!(task.contains("Fix the bug"));
+            }
+            _ => panic!("Expected CallAgent"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_prose_before_next_multiline() {
+        let output = "I analyzed the code and found 3 issues.\nThe main problem is in auth.rs.\n\nHere is my fix:\n- Changed line 42\n- Added validation\n\nNEXT: DONE";
+        match parse_agent_directive(output) {
+            Directive::Done(r) => {
+                assert!(r.contains("3 issues"));
+                assert!(r.contains("Changed line 42"));
+            }
+            _ => panic!("Expected Done"),
+        }
+    }
+
+    #[test]
+    fn test_parse_directive_task_multiline_bullets() {
+        let output = "NEXT: reviewer\nTASK: Review auth.rs for:\n- SQL injection\n- XSS vulnerabilities";
+        match parse_agent_directive(output) {
+            Directive::CallAgent { name, task } => {
+                assert_eq!(name, "reviewer");
+                assert!(task.contains("SQL injection"));
+                assert!(task.contains("XSS"));
+            }
+            _ => panic!("Expected CallAgent"),
+        }
+    }
+
 }

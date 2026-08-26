@@ -263,6 +263,26 @@ where
     }
 }
 
+
+/// Shared HTTP provider base — reduces boilerplate in cloud provider implementations.
+pub struct HttpProviderBase {
+    pub api_key: String,
+    pub model: String,
+    pub base_url: String,
+    pub client: reqwest::Client,
+}
+
+impl HttpProviderBase {
+    pub fn new(api_key: String, model: &str, base_url: &str) -> Self {
+        Self {
+            api_key,
+            model: model.to_string(),
+            base_url: base_url.to_string(),
+            client: reqwest::Client::new(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

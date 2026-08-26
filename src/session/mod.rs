@@ -46,8 +46,14 @@ pub struct SessionMeta {
 
 // ── Full session (stored on disk + held in memory) ───────────────────────────
 
+/// Current format version for session data migration.
+const SESSION_FORMAT_VERSION: u32 = 1;
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SessionData {
+    /// Format version for future migration support.
+    #[serde(default = "default_version")]
+    pub version: u32,
     pub id: String,
     pub provider_name: String,
     pub messages: Vec<ChatMessage>,
@@ -72,6 +78,8 @@ pub struct SharedSession {
     pub created_at: DateTime<Utc>,
     updated_at: Arc<Mutex<DateTime<Utc>>>,
 }
+
+fn default_version() -> u32 { SESSION_FORMAT_VERSION }
 
 impl SharedSession {
     /// Create a brand-new session.
@@ -114,6 +122,7 @@ impl SharedSession {
         let dir = sessions_dir()?;
         fs::create_dir_all(&dir)?;
         let data = SessionData {
+            version: SESSION_FORMAT_VERSION,
             id: self.id.clone(),
             provider_name: self.provider_name.clone(),
             messages: snapshot,
@@ -175,6 +184,7 @@ impl SharedSession {
         let dir = sessions_dir()?;
         std::fs::create_dir_all(&dir)?;
         let data = SessionData {
+            version: SESSION_FORMAT_VERSION,
             id: self.id.clone(),
             provider_name: self.provider_name.clone(),
             messages: msgs.to_vec(),
@@ -207,12 +217,12 @@ impl SharedSession {
     /// Returns Ok if claimed, Err if already taken by someone else.
     pub fn claim_frontend(&self, frontend: u8) -> Result<()> {
         // Try to swap NONE -> frontend atomically
-        if let Ok(_) = self.active_frontend.compare_exchange(
+        if self.active_frontend.compare_exchange(
             FRONTEND_NONE,
             frontend,
             Ordering::SeqCst,
             Ordering::SeqCst,
-        ) { return Ok(()) }
+        ).is_ok() { return Ok(()) }
         // Already held by the same frontend (idempotent re-claim)
         let current = self.active_frontend.load(Ordering::SeqCst);
         if current == frontend {
@@ -307,7 +317,7 @@ pub fn list_sessions() -> Result<Vec<SessionMeta>> {
             }
         }
     }
-    metas.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    metas.sort_by_key(|a| std::cmp::Reverse(a.updated_at));
     Ok(metas)
 }
 
@@ -549,7 +559,7 @@ mod tests {
         for i in 0..10 {
             let session = Arc::clone(&s);
             handles.push(thread::spawn(move || {
-                session.messages.lock().push(ChatMessage::user(&format!("msg {}", i)));
+                session.messages.lock().push(ChatMessage::user(format!("msg {}", i)));
             }));
         }
 
@@ -564,7 +574,7 @@ mod tests {
     fn test_messages_since_boundary() {
         let s = SharedSession::new("local");
         for i in 0..5 {
-            s.messages.lock().push(ChatMessage::user(&format!("msg {}", i)));
+            s.messages.lock().push(ChatMessage::user(format!("msg {}", i)));
         }
 
         // Offset at exact length
