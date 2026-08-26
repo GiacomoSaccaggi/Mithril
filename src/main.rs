@@ -17,7 +17,7 @@ mod tui;
 #[derive(Parser)]
 #[command(name = "mithril")]
 #[command(about = "Lightweight local LLM inference engine", long_about = None)]
-#[command(version = "0.2.0")]
+#[command(version = "0.3.0")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
