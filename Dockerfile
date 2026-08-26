@@ -26,8 +26,8 @@ COPY --from=builder /app/target/release/mithril /usr/local/bin/mithril
 # Create config directory
 RUN mkdir -p /root/.mithril
 
-# Default fellowship config (can be overridden via volume mount)
-COPY .mithril/fellowship.yaml /root/.mithril/fellowship.yaml 2>/dev/null || true
+# Fellowship config is provided via volume mount (-v .mithril:/root/.mithril)
+# No default config copied into the image
 
 # API credentials via environment variables:
 #   MITHRIL_KEY_GEMINI=AIza...
