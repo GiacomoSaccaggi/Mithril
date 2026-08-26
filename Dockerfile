@@ -7,7 +7,7 @@
 FROM rust:latest AS builder
 
 RUN apt-get update && apt-get install -y \
-    cmake g++ pkg-config libssl-dev \
+    cmake g++ pkg-config libssl-dev libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
