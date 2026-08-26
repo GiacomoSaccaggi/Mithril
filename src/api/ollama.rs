@@ -97,7 +97,7 @@ pub async fn list_models(State(_state): State<AppState>) -> Json<Value> {
 }
 
 pub async fn version() -> Json<Value> {
-    Json(json!({ "version": "0.1.0" }))
+    Json(json!({ "version": "0.2.0" }))
 }
 
 pub async fn running_models(State(state): State<AppState>) -> Json<Value> {

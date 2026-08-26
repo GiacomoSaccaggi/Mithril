@@ -170,7 +170,7 @@ async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
         "model_loaded": state.model_manager.is_loaded(),
-        "version": "0.1.0"
+        "version": "0.2.0"
     }))
 }
 
