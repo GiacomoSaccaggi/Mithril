@@ -17,7 +17,7 @@ mod tui;
 #[derive(Parser)]
 #[command(name = "mithril")]
 #[command(about = "Lightweight local LLM inference engine", long_about = None)]
-#[command(version = "0.3.0")]
+#[command(version = "0.4.0")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -136,10 +136,14 @@ async fn main() -> Result<()> {
             // Optionally start HTTP server in background
             if serve {
                 let cwd = std::env::current_dir().unwrap_or_default().to_string_lossy().to_string();
-                let _ = std::process::Command::new("sh")
-                    .args(["-c", &format!("lsof -ti :{port} | xargs kill -9 2>/dev/null")])
-                    .status();
-                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                // Kill any existing process on the port (Unix only)
+                #[cfg(unix)]
+                {
+                    let _ = std::process::Command::new("sh")
+                        .args(["-c", &format!("lsof -ti :{port} | xargs kill -9 2>/dev/null")])
+                        .status();
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
                 tokio::spawn(async move {
                     if let Err(e) = crate::api::server::MithrilServer::start(port, &cwd).await {
                         eprintln!("Server error: {}", e);

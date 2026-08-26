@@ -1,0 +1,19 @@
+name: Update Homebrew
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  homebrew:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update tap
+        uses: dawidd6/action-homebrew-bump-formula@v3
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: GiacomoSaccaggi/homebrew-tap
+          formula: mithril
+          tag: ${{ github.event.release.tag_name }}
+          revision: ${{ github.event.release.target_commitish }}

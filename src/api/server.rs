@@ -90,6 +90,7 @@ impl MithrilServer {
         //     is applied before merge which is the correct ordering for tower layers.
         let public_routes = Router::new()
             .route("/health", get(health))
+            .route("/metrics", get(metrics))
             .route("/api/tags", get(super::ollama::list_models))
             .route("/api/version", get(super::ollama::version))
             .route("/api/ps", get(super::ollama::running_models))
@@ -166,11 +167,20 @@ pub fn build_app(state: AppState) -> axum::Router {
         .with_state(state)
 }
 
+/// Prometheus-style metrics endpoint for monitoring.
+async fn metrics(State(state): State<AppState>) -> String {
+    let model_loaded = state.model_manager.is_loaded();
+    format!(
+        "# HELP mithril_up Whether the service is up\n         # TYPE mithril_up gauge\n         mithril_up 1\n         # HELP mithril_model_loaded Whether a GGUF model is loaded in memory\n         # TYPE mithril_model_loaded gauge\n         mithril_model_loaded {}\n         # HELP mithril_info Service information\n         # TYPE mithril_info gauge\n         mithril_info{{version=\"0.3.0\"}} 1\n",
+        if model_loaded { 1 } else { 0 }
+    )
+}
+
 async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(json!({
         "status": "ok",
         "model_loaded": state.model_manager.is_loaded(),
-        "version": "0.3.0"
+        "version": "0.4.0"
     }))
 }
 
