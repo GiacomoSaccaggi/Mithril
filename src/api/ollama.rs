@@ -45,6 +45,106 @@ pub struct Options {
     pub num_predict: Option<u32>,
 }
 
+
+/// Handle chat requests routed through a fellowship (multi-agent orchestration) with streaming.
+async fn chat_fellowship(
+    _state: AppState,
+    req: ChatRequest,
+    fellowship_config: crate::flow::fellowship::FellowshipConfig,
+) -> Result<Response, (StatusCode, Json<Value>)> {
+    use crate::config::MithrilConfig;
+    use crate::flow::orchestrator::Orchestrator;
+    use crate::flow::TraceMode;
+    use crate::providers::ChatMessage as ProviderMessage;
+
+    let config = MithrilConfig::load().map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({ "error": format!("config load failed: {e}") })),
+    ))?;
+
+    let mut orchestrator = Orchestrator::new(fellowship_config, config, TraceMode::Silent);
+
+    let messages: Vec<ProviderMessage> = req.messages.iter().map(|m| ProviderMessage {
+        role: m.role.clone(),
+        content: m.content.clone(),
+    }).collect();
+
+    // Feed conversation history to orchestrator (last user message is the request)
+    let user_message = messages.last()
+        .map(|m| m.content.clone())
+        .unwrap_or_default();
+
+    let model_name = req.model.clone();
+    let use_stream = req.stream.unwrap_or(false);
+
+    // Run orchestrator
+    let result = orchestrator.handle_request(&user_message).await.map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({ "error": e.to_string() })),
+    ))?;
+
+    let response_text = result.response;
+
+    if use_stream {
+        // Stream the response token by token (simulate streaming by splitting into words)
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
+        let text = response_text.clone();
+        tokio::spawn(async move {
+            // Split into small chunks to simulate streaming
+            for word in text.split_inclusive(|c: char| c.is_whitespace()) {
+                if tx.send(word.to_string()).await.is_err() { break; }
+                tokio::time::sleep(std::time::Duration::from_millis(15)).await;
+            }
+        });
+
+        let body = Body::from_stream(async_stream::stream! {
+            loop {
+                match rx.recv().await {
+                    Some(piece) => {
+                        let chunk = json!({
+                            "model": model_name,
+                            "created_at": Utc::now().to_rfc3339(),
+                            "message": { "role": "assistant", "content": piece },
+                            "done": false
+                        });
+                        yield Ok::<axum::body::Bytes, std::convert::Infallible>(
+                            format!("{}\n", serde_json::to_string(&chunk).unwrap_or_default()).into()
+                        );
+                    }
+                    None => {
+                        let done_chunk = json!({
+                            "model": model_name,
+                            "created_at": Utc::now().to_rfc3339(),
+                            "message": { "role": "assistant", "content": "" },
+                            "done": true
+                        });
+                        yield Ok::<axum::body::Bytes, std::convert::Infallible>(
+                            format!("{}\n", serde_json::to_string(&done_chunk).unwrap_or_default()).into()
+                        );
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(Response::builder()
+            .header("content-type", "application/x-ndjson")
+            .body(body)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))))?)
+    } else {
+        let body = serde_json::to_string(&json!({
+            "model": model_name,
+            "created_at": Utc::now().to_rfc3339(),
+            "message": { "role": "assistant", "content": response_text },
+            "done": true
+        })).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))))?;
+        Ok(Response::builder()
+            .header("content-type", "application/json")
+            .body(Body::from(body))
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": e.to_string() }))))?)
+    }
+}
+
 pub async fn list_models(State(_state): State<AppState>) -> Json<Value> {
     use crate::config::MithrilConfig;
 
@@ -117,7 +217,7 @@ pub async fn list_models(State(_state): State<AppState>) -> Json<Value> {
 }
 
 pub async fn version() -> Json<Value> {
-    Json(json!({ "version": "0.3.0" }))
+    Json(json!({ "version": "0.4.0" }))
 }
 
 pub async fn running_models(State(state): State<AppState>) -> Json<Value> {
@@ -203,10 +303,20 @@ pub async fn chat(
         return chat_cloud(state, req, provider_name).await;
     }
 
+    // Route to fellowship orchestrator if model matches a fellowship name
+    if let Ok(fellowships) = crate::flow::fellowship::try_list_fellowships() {
+        let model_lower = req.model.to_lowercase().replace(":latest", "");
+        for (_key, fellowship_config) in &fellowships {
+            if fellowship_config.name.to_lowercase() == model_lower {
+                return chat_fellowship(state, req, fellowship_config.clone()).await;
+            }
+        }
+    }
+
     let model_info = find_model(&req.model).ok_or_else(|| {
         (
             StatusCode::NOT_FOUND,
-            Json(json!({ "error": format!("model not found: {}. Use a local model (qwen-1.5b, llama-8b, ...) or a cloud model (gemini, gemini-1.5-flash, gpt-4o, claude-3-5-sonnet).", req.model) })),
+            Json(json!({ "error": format!("model not found: {}. Use a local model, cloud model, or fellowship name.", req.model) })),
         )
     })?;
 

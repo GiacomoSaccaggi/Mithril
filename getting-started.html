@@ -242,7 +242,7 @@
                         </header>
                             <div class="report" style="background-color:WHITE">
                                 
-        <button id="darkToggle_c4a8d503" onclick="toggleDarkMode_c4a8d503()"
+        <button id="darkToggle_ebd497e4" onclick="toggleDarkMode_ebd497e4()"
             style="position:fixed;top:1rem;right:1rem;z-index:9999;
             background:var(--card);border:1px solid var(--border);border-radius:50%;
             width:40px;height:40px;cursor:pointer;font-size:1.2rem;
@@ -252,7 +252,7 @@
         (function() {
             var isDark = false;
             var root = document.documentElement;
-            var btn = document.getElementById('darkToggle_c4a8d503');
+            var btn = document.getElementById('darkToggle_ebd497e4');
             var lightVars = {
                 '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
                 '--dim': '#64748b', '--border': '#e2e8f0',
@@ -261,7 +261,7 @@
                 '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
                 '--dim': '#94a3b8', '--border': '#334155',
             };
-            window.toggleDarkMode_c4a8d503 = function() {
+            window.toggleDarkMode_ebd497e4 = function() {
                 isDark = !isDark;
                 var vars = isDark ? darkVars : lightVars;
                 Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
@@ -306,15 +306,14 @@
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
                     letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    5
+                    6
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Gemini, OpenAI, Anthropic, Groq, Local</div>
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Local + Cloud + CLI</div>
             </div></div><h2>What is Mithril?</h2><p>
 <p style="font-size:1.1rem;">Mithril is a <strong>multi-model orchestration engine</strong>. You define a team of AI models 
 (a "fellowship"), and Mithril exposes them as a single Ollama-compatible API endpoint.</p>
-
 <p>Any tool that speaks Ollama — <strong>Junie, OpenCode, Open WebUI, LangChain</strong> — connects to Mithril 
-and gets access to your orchestrated team of models. They don't know they're talking to multiple models.</p>
+and gets access to your orchestrated team of models.</p>
 </p><div class="scomp-mermaid-card">
 <h4>How It Works</h4>
 <pre class="mermaid">flowchart LR
@@ -324,98 +323,138 @@ and gets access to your orchestrated team of models. They don't know they're tal
     API --> ORCH(Orchestrator)
     ORCH --> GEM(Gemini)
     ORCH --> GPT(OpenAI)
-    ORCH --> ANT(Anthropic)
+    ORCH --> CLI(Kiro CLI)
     ORCH --> LOC(Local GGUF)</pre>
-</div><button class="collapsiblemygs">Quick Start — As Backend for Junie/OpenCode</button> <div class="content"><p>
-<h3>1. Install</h3>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>One-line install</h4>
-<pre ><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash</code></pre>
-</div><p>
-<h3>2. Configure</h3>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>API Keys</h4>
-<pre ><code class="language-bash"># Set API keys (encrypted at rest)
-mithril config set gemini &quot;AIza...&quot;
-mithril config set openai &quot;sk-...&quot;
+</div><button class="collapsiblemygs">Guide: Multi-Agent Gemini via Mithril in Junie</button> <div class="content"><p>
+<h3>Goal</h3>
+<p>Set up Mithril with multiple Gemini models as a multi-agent backend, then connect Junie to it.
+Junie sees "one model" but behind it you have specialized Gemini agents working together.</p>
 
-# Or for Docker: use environment variables
-export MITHRIL_KEY_GEMINI=&quot;AIza...&quot;
-export MITHRIL_KEY_OPENAI=&quot;sk-...&quot; </code></pre>
-</div><p>
-<h3>3. Create a Fellowship</h3>
+<h3>Step 1: Install Mithril</h3>
 </p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>fellowship.yaml</h4>
-<pre ><code class="language-yaml"># .mithril/fellowship.yaml
-name: &quot;my-team&quot;
+<h4>Install</h4>
+<pre ><code class="language-bash"># macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
+
+# Or Docker
+docker pull ghcr.io/giacomosaccaggi/mithril:latest</code></pre>
+</div><p><h3>Step 2: Get a Gemini API Key</h3></p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>Set API key</h4>
+<pre ><code class="language-bash"># Get your key from https://aistudio.google.com/apikey
+mithril config set gemini &quot;AIzaSy...&quot;  </code></pre>
+</div><p><h3>Step 3: Create a Multi-Agent Fellowship</h3></p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>.mithril/fellowship.yaml</h4>
+<pre ><code class="language-yaml"># Create .mithril/fellowship.yaml in your project:
+
+name: &quot;gemini-multi&quot;
+description: &quot;Multi-agent Gemini team&quot;
+
 controller:
-  provider: local         # Free GGUF classifier
-  model: qwen-1.5b
+  provider: local
+  model: qwen-1.5b     # Free local router
 
 agents:
   - name: coder
     provider: gemini
     model: gemini-2.5-flash
-    when: &quot;coding tasks&quot;
+    role: &quot;Fast coder — implements features quickly&quot;
+    when: &quot;coding tasks, implementations, bug fixes&quot;
+    can_call: [reviewer]
     tools: [&quot;*&quot;]
 
   - name: reviewer
-    provider: openai
-    model: gpt-4o
-    when: &quot;code review&quot;
-    tools: [read_psi, grep_files]</code></pre>
-</div><p>
-<h3>4. Start & Connect</h3>
-</p><div class="scomp-code-card">
+    provider: gemini
+    model: gemini-2.5-pro
+    role: &quot;Senior reviewer — catches bugs and architecture issues&quot;
+    when: &quot;code review, complex logic analysis&quot;
+    can_call: []
+    tools: [&quot;read_psi&quot;, &quot;grep_files&quot;, &quot;git_diff&quot;]
+
+  - name: researcher
+    provider: gemini
+    model: gemini-2.5-flash
+    role: &quot;Researcher — searches web and documentation&quot;
+    when: &quot;questions about APIs, libraries, documentation&quot;
+    can_call: []
+    tools: [&quot;web_search&quot;, &quot;fetch_page&quot;]</code></pre>
+</div><p><h3>Step 4: Start Mithril</h3></p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
 <h4>Start the engine</h4>
 <pre ><code class="language-bash">mithril serve
-# → http://localhost:16180
+# Output:
+#   Server http://localhost:16180
+#   Fellowship: gemini-multi (coder, reviewer, researcher)</code></pre>
+</div><p><h3>Step 5: Connect Junie</h3></p><p>
+<p>In your JetBrains IDE with Junie:</p>
+<ol>
+    <li>Open <strong>Settings → Junie → AI Provider</strong></li>
+    <li>Select <strong>Ollama</strong> as the provider type</li>
+    <li>Set URL: <code>http://localhost:16180</code></li>
+    <li>Click "Refresh Models" — you'll see <code>gemini-multi:latest</code></li>
+    <li>Select it as your model</li>
+    <li>Done! Junie now uses your multi-agent Gemini team</li>
+</ol>
 
-# In Junie/OpenCode: set Ollama URL to http://localhost:16180
-# Select &quot;my-team:latest&quot; as the model</code></pre>
-</div></div><button class="collapsiblemygs">Quick Start — Docker</button> <div class="content"><div class="scomp-code-card">
+<h3>What Happens When You Ask Junie Something</h3>
+<ol>
+    <li>Junie sends your request to <code>http://localhost:16180/api/chat</code></li>
+    <li>Mithril's GGUF classifier reads it (~100ms, free)</li>
+    <li>Routes to the right agent:
+        <ul>
+            <li>"Fix this bug" → <strong>coder</strong> (Gemini Flash)</li>
+            <li>"Review this PR" → <strong>reviewer</strong> (Gemini Pro)</li>
+            <li>"How does this API work?" → <strong>researcher</strong> (Gemini Flash + web)</li>
+        </ul>
+    </li>
+    <li>Agent can use tools (read files, search web, etc.)</li>
+    <li>Agent can delegate: coder writes code → hands to reviewer → reviewer approves</li>
+    <li>Response streams back to Junie</li>
+</ol>
+</p><p><h3>Docker Alternative (for teams)</h3></p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Docker deployment</h4>
-<pre ><code class="language-bash">git clone https://github.com/GiacomoSaccaggi/mithril.git
-cd mithril
-
-# Set keys in .env
-echo &quot;MITHRIL_KEY_GEMINI=AIza...&quot; &gt; .env
-echo &quot;MITHRIL_KEY_OPENAI=sk-...&quot; &gt;&gt; .env
+<h4>Docker for teams</h4>
+<pre ><code class="language-bash"># docker-compose.yml already included in repo
+# Just set your Gemini key:
+echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
 
 docker compose up -d
-# → http://localhost:16180 ready</code></pre>
+# → http://localhost:16180 ready for all team members</code></pre>
+</div></div><button class="collapsiblemygs">Quick Start — Native Install</button> <div class="content"><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>4 commands to get started</h4>
+<pre ><code class="language-bash"># Install
+curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
+
+# Set keys
+mithril config set gemini &quot;AIza...&quot;
+mithril config set openai &quot;sk-...&quot;   # optional
+
+# Create fellowship
+mithril fellowship init
+
+# Start
+mithril serve</code></pre>
 </div></div><button class="collapsiblemygs">Architecture Overview</button> <div class="content"><p>
 <h3>The Request Flow</h3>
 <ol>
-    <li><strong>Client</strong> (Junie, OpenCode, etc.) sends a chat request to <code>/api/chat</code></li>
-    <li><strong>API Layer</strong> deserializes the Ollama/OpenAI format</li>
-    <li><strong>GGUF Classifier</strong> — a tiny local model decides which agent handles it (free, ~100ms)</li>
-    <li><strong>Agent</strong> executes with its configured cloud provider + available tools</li>
-    <li><strong>Tool Loop</strong> — agent calls tools (read files, search, git) as needed</li>
-    <li><strong>Delegation</strong> — agent can hand off to another agent via NEXT/TASK protocol</li>
-    <li><strong>Response</strong> streams back to the client</li>
+    <li><strong>Client</strong> sends chat request to <code>/api/chat</code></li>
+    <li><strong>API Layer</strong> deserializes Ollama/OpenAI format</li>
+    <li><strong>GGUF Classifier</strong> — tiny local model decides which agent (~100ms, free)</li>
+    <li><strong>Agent</strong> executes with its provider + available tools</li>
+    <li><strong>Tool Loop</strong> — agent calls tools as needed</li>
+    <li><strong>Delegation</strong> — agent can hand off via NEXT/TASK</li>
+    <li><strong>Response</strong> streams back to client</li>
 </ol>
 
-<h3>Why This Architecture?</h3>
+<h3>Three Provider Types</h3>
 <ul>
-    <li><strong>Cost optimization:</strong> GGUF routes for free — only pay for the agent that actually works</li>
-    <li><strong>Specialization:</strong> Different models for different tasks (fast for coding, thorough for review)</li>
-    <li><strong>Extensibility:</strong> Add providers/tools/agents without changing existing code</li>
-    <li><strong>Compatibility:</strong> Standard APIs mean zero client-side changes</li>
+    <li><strong>Local GGUF:</strong> Free, private, used for routing. llama.cpp inference.</li>
+    <li><strong>Cloud API:</strong> Gemini, OpenAI, Anthropic, Groq. Pay-per-token via HTTP.</li>
+    <li><strong>CLI Tools:</strong> Kiro, Junie, any CLI with chat mode. Subprocess calls.</li>
 </ul>
-</p></div><button class="collapsiblemygs">The Fellowship Concept</button> <div class="content"><p>
-<p>A <strong>fellowship</strong> is your custom team of AI models. You define:</p>
-<ul>
-    <li><strong>Controller:</strong> The local model that classifies/routes requests (free)</li>
-    <li><strong>Agents:</strong> Each with a name, provider, model, role, and allowed tools</li>
-    <li><strong>Delegation rules:</strong> Who can call whom (<code>can_call</code> list)</li>
-</ul>
-<p>Fellowships appear as "models" in the Ollama API. Clients select them by name.</p>
 </p></div>
                             </div>
                             

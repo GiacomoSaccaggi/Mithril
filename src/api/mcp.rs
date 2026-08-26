@@ -9,7 +9,7 @@ use crate::operators::{file::FileOperator, scan::ScanOperator};
 use crate::tools::registry::ToolRegistry;
 
 const MCP_PROTOCOL_VERSION: &str = "2024-11-05";
-const SERVER_VERSION: &str = "0.3.0";
+const SERVER_VERSION: &str = "0.4.0";
 
 /// Port of McpRouter.kt — dispatches JSON-RPC 2.0 requests.
 pub async fn handle_mcp(

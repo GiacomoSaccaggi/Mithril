@@ -144,7 +144,8 @@ impl Orchestrator {
 
         let prompt = format!(
             "Which agent should handle this? Reply with ONLY the agent name, nothing else.\n\nAgents:\n{}\n\nMessage: {}",
-            labels.join("\n"), user_message
+            labels.join("
+"), user_message
         );
 
         let controller = providers::create_provider_with_model(
@@ -168,6 +169,32 @@ impl Orchestrator {
             .map(|a| a.name.clone());
 
         Ok(matched.unwrap_or_else(|| self.config.agents[0].name.clone()))
+    }
+
+    /// Query the Palantír BM25 index for relevant files based on user message.
+    /// Returns a brief context string with file paths and snippets.
+    fn query_palantir(&self, query: &str) -> String {
+        use crate::index::palantir::PalantirIndex;
+        
+        let cwd = std::env::current_dir()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| ".".to_string());
+        
+        let index = match PalantirIndex::load_or_null(&cwd) {
+            Some(idx) => idx,
+            None => return String::new(),
+        };
+        
+        let results = index.query(query, 3);
+        if results.is_empty() {
+            return String::new();
+        }
+        
+        results.iter()
+            .map(|r| format!("- {} (score: {:.2})", r.entry.path, r.score))
+            .collect::<Vec<_>>()
+            .join("
+")
     }
 
     /// Check if user message starts with #agentname and extract the agent name.
@@ -334,7 +361,8 @@ impl Orchestrator {
 
         let mut messages = vec![ChatMessage::system(&system)];
         if !recent.is_empty() {
-            messages.push(ChatMessage::system(format!("Recent context:\n{}", recent.join("\n"))));
+            messages.push(ChatMessage::system(format!("Recent context:\n{}", recent.join("
+"))));
         }
         messages.push(ChatMessage::user(task));
 
@@ -505,10 +533,12 @@ fn parse_agent_directive(output: &str) -> Directive {
                     parts.push(line);
                 }
             }
-            parts.join("\n").trim().to_string()
+            parts.join("
+").trim().to_string()
         } else {
             // No RESPONSE: — take everything BEFORE the NEXT: line
-            lines[..next_idx].join("\n").trim().to_string()
+            lines[..next_idx].join("
+").trim().to_string()
         };
 
         Directive::Done(response)
@@ -525,7 +555,8 @@ fn parse_agent_directive(output: &str) -> Directive {
                     parts.push(line);
                 }
             }
-            parts.join("\n").trim().to_string()
+            parts.join("
+").trim().to_string()
         } else {
             // No TASK: — use full output
             output.to_string()
@@ -555,7 +586,8 @@ fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAg
     let can_call_section = if can_call_desc.is_empty() {
         "You cannot call other agents. Complete the task yourself.".to_string()
     } else {
-        format!("You can delegate to:\n{}", can_call_desc.join("\n"))
+        format!("You can delegate to:\n{}", can_call_desc.join("
+"))
     };
 
     format!(

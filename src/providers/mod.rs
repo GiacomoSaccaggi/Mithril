@@ -22,6 +22,7 @@
 
 #![allow(dead_code)]
 mod local;
+pub mod kiro;
 mod gemini;
 mod openai;
 mod anthropic;
@@ -184,6 +185,11 @@ pub fn create_provider_with_model(
     config: &crate::config::MithrilConfig,
 ) -> Result<Box<dyn ChatProvider>> {
     match name {
+        "kiro" => {
+            // Kiro CLI provider — no API key needed (uses kiro-cli auth)
+            let model = model_override.unwrap_or("claude-sonnet-4");
+            Ok(Box::new(kiro::KiroProvider::new(model)))
+        }
         "local" => {
             let model = model_override.unwrap_or(&config.default_model);
             Ok(Box::new(LocalProvider::new(model)?))

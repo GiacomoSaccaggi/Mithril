@@ -1,9 +1,13 @@
 [package]
 name = "mithril"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
-description = "Lightweight local LLM inference engine"
+description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
 license = "MIT"
+repository = "https://github.com/GiacomoSaccaggi/Mithril"
+homepage = "https://giacomosaccaggi.github.io/Mithril/"
+keywords = ["llm", "ai", "ollama", "multi-agent", "orchestration"]
+categories = ["command-line-utilities", "web-programming"]
 
 [[bin]]
 name = "mithril"
