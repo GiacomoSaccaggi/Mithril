@@ -1,4 +1,5 @@
 pub mod serve;
+pub mod chat_core;
 pub mod agent_loop;
 pub mod exec;
 pub mod steering;
@@ -15,5 +16,4 @@ pub mod chat;
 pub mod telegram;
 pub mod sessions;
 pub mod flow;
-pub mod start;
 pub mod init;

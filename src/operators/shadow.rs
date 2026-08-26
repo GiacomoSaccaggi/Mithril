@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code)] // Shadow log has forward-looking backup features
 use std::fs;
 use std::path::PathBuf;
 

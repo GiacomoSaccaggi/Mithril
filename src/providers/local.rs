@@ -2,7 +2,6 @@
 //! Having a singleton prevents loading the same model twice when LocalProvider is
 //! instantiated multiple times (e.g. on provider switch in mithril chat).
 
-#![allow(dead_code)]
 use super::{ChatMessage, ChatProvider, StreamChunk};
 use crate::engine::{self, find_model, get_stop_tokens, ChatTemplate, LazyModelManager};
 use anyhow::{Context, Result};

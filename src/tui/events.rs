@@ -145,10 +145,26 @@ fn handle_input_key(app: &mut App, key: KeyEvent) -> Action {
         (KeyModifiers::NONE, KeyCode::Tab) => {
             if !app.suggestions.is_empty() {
                 app.accept_suggestion();
-            } else if app.input.is_empty() {
-                app.mode = app.mode.toggle();
             } else {
-                app.focus = Focus::Chat;
+                // Try #agent completion
+                let agent_suggestions = app.get_agent_suggestions();
+                if agent_suggestions.len() == 1 {
+                    app.input = format!("#{} ", agent_suggestions[0]);
+                    app.cursor = app.input.len();
+                } else {
+                    // Try @file completion
+                    let file_suggestions = app.get_file_suggestions();
+                    if file_suggestions.len() == 1 {
+                        let text = &app.input[..app.cursor.min(app.input.len())];
+                        if let Some(at_pos) = text.rfind('@') {
+                            let replacement = format!("@{}", file_suggestions[0]);
+                            app.input = format!("{}{}{}", &app.input[..at_pos], replacement, &app.input[app.cursor..]);
+                            app.cursor = at_pos + replacement.len();
+                        }
+                    } else if app.input.is_empty() {
+                        app.mode = app.mode.toggle();
+                    }
+                }
             }
             Action::None
         }
@@ -282,11 +298,11 @@ mod tests {
     #[test]
     fn test_ctrl_s_toggles_sidebar() {
         let mut app = make_app();
+        assert!(!app.sidebar_visible); // starts hidden
+        handle_key(&mut app, make_key(KeyCode::Char('s'), KeyModifiers::CONTROL));
         assert!(app.sidebar_visible);
         handle_key(&mut app, make_key(KeyCode::Char('s'), KeyModifiers::CONTROL));
         assert!(!app.sidebar_visible);
-        handle_key(&mut app, make_key(KeyCode::Char('s'), KeyModifiers::CONTROL));
-        assert!(app.sidebar_visible);
     }
 
     #[test]
@@ -498,12 +514,14 @@ mod tests {
     }
 
     #[test]
-    fn test_input_tab_changes_focus_with_text() {
+    fn test_input_tab_with_text_stays_in_input() {
         let mut app = make_app();
         app.focus = Focus::Input;
         app.input = "some text".to_string();
+        app.cursor = 9;
         handle_key(&mut app, make_key(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(app.focus, Focus::Chat);
+        // Tab with text no longer switches focus (it tries @file completion)
+        assert_eq!(app.focus, Focus::Input);
     }
 
     // Chat focus tests

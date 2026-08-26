@@ -1,0 +1,27 @@
+# Mithril — Docker Compose deployment
+# Usage:
+#   docker compose up -d
+#   Then point Junie/OpenCode to http://localhost:16180
+
+services:
+  mithril:
+    build: .
+    ports:
+      - "16180:16180"
+    environment:
+      - MITHRIL_KEY_GEMINI=${MITHRIL_KEY_GEMINI:-}
+      - MITHRIL_KEY_OPENAI=${MITHRIL_KEY_OPENAI:-}
+      - MITHRIL_KEY_ANTHROPIC=${MITHRIL_KEY_ANTHROPIC:-}
+      - MITHRIL_KEY_GROQ=${MITHRIL_KEY_GROQ:-}
+    volumes:
+      # Mount your fellowship config
+      - ./.mithril:/root/.mithril
+      # Mount project for file tools (optional)
+      - ./:/workspace
+    working_dir: /workspace
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:16180/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

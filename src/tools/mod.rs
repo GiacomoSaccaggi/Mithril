@@ -28,6 +28,7 @@ use crate::operators::{
 };
 use registry::ToolRegistry;
 
+
 pub fn create_default_registry(base_path: &str) -> ToolRegistry {
     use implementations::*;
 
@@ -68,4 +69,18 @@ pub fn create_default_registry(base_path: &str) -> ToolRegistry {
     registry.register(TodoWriteTool::new());
     registry.register(QuestionTool::new());
     registry
+}
+
+/// Execute a tool by name with panic safety. Shared by all execution engines.
+pub fn execute_tool_safe(registry: &registry::ToolRegistry, call: &crate::providers::ToolCall) -> registry::ToolResult {
+    let tool = match registry.get(&call.name) {
+        Some(t) => t,
+        None => return registry::ToolResult::err(format!("Tool '{}' not found", call.name)),
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        tool.execute(&call.arguments)
+    })) {
+        Ok(result) => result,
+        Err(_) => registry::ToolResult::err(format!("Tool '{}' panicked", call.name)),
+    }
 }

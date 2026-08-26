@@ -164,7 +164,7 @@ fn analyze_project(root: &Path) -> ProjectAnalysis {
 
     // Sort languages by count
     let mut languages: Vec<(String, usize)> = lang_counts.into_iter().collect();
-    languages.sort_by(|a, b| b.1.cmp(&a.1));
+    languages.sort_by_key(|a| std::cmp::Reverse(a.1));
     languages.truncate(8);
 
     key_dirs.sort();

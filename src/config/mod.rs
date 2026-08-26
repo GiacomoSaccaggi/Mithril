@@ -1,10 +1,10 @@
+#![allow(dead_code)] // Config has credential migration helpers
 //! Configuration management with Argon2id-derived AES-256-GCM credentials.
 //!
 //! Config stored at `~/.mithril/config.yaml`
 //! Credential format (v2): base64(nonce\[12\] || salt\[16\] || ciphertext)
 //! Credential format (v1, legacy): base64(nonce\[12\] || ciphertext)  — auto-migrated on read
 
-#![allow(dead_code)]
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Nonce,
@@ -357,6 +357,16 @@ impl MithrilConfig {
     /// Returns decrypted credential in a Zeroizing wrapper.
     /// The key material is wiped from memory when the wrapper is dropped.
     pub fn get_credential(&self, name: &str) -> Result<Option<String>> {
+        // Priority 1: Environment variable (for Docker/CI)
+        // Format: MITHRIL_KEY_<NAME> (uppercased)
+        let env_key = format!("MITHRIL_KEY_{}", name.to_uppercase());
+        if let Ok(val) = std::env::var(&env_key) {
+            if !val.is_empty() {
+                return Ok(Some(val));
+            }
+        }
+
+        // Priority 2: Encrypted credential in config file
         match self.credentials.get(name) {
             Some(encrypted) => {
                 let z = decrypt_credential_with_secret(encrypted, self.key_password.as_deref())?;

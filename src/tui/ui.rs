@@ -15,9 +15,9 @@ use super::theme;
 pub fn render(frame: &mut Frame, app: &App) {
     let size = frame.area();
 
-    // Dynamic input height: 3 lines base, grows with newlines up to 7 (5 visible lines + border)
+    // Dynamic input height: 3 lines base, grows with newlines up to 12 (10 visible lines + border)
     let newline_count = app.input.chars().filter(|c| *c == '\n').count();
-    let input_height = (newline_count as u16 + 3).min(7); // 3 base (1 line + border), max 7 (5 lines + border)
+    let input_height = (newline_count as u16 + 3).min(12); // 3 base (1 line + border), max 12
 
     // Top-level layout: status bar + main content + input
     let outer = Layout::default()
@@ -100,16 +100,27 @@ fn render_chat_panel(frame: &mut Frame, app: &App, area: Rect) {
     for msg in &app.messages {
         match &msg.role {
             Role::User => {
-                lines.push(Line::from(vec![
-                    Span::styled("▶ ", theme::user_style()),
-                    Span::styled(&msg.content, theme::user_style()),
-                ]));
+                // Render multiline user messages properly
+                for (i, text_line) in msg.content.lines().enumerate() {
+                    if i == 0 {
+                        lines.push(Line::from(vec![
+                            Span::styled("▶ ", theme::user_style()),
+                            Span::styled(text_line, theme::user_style()),
+                        ]));
+                    } else {
+                        lines.push(Line::from(vec![
+                            Span::styled("  ", theme::user_style()),
+                            Span::styled(text_line, theme::user_style()),
+                        ]));
+                    }
+                }
                 lines.push(Line::from(""));
             }
             Role::Assistant => {
-                // Wrap long assistant messages
-                for text_line in msg.content.lines() {
-                    lines.push(Line::from(Span::styled(text_line, theme::assistant_style())));
+                // Use centralized markdown stripping
+                let cleaned = crate::cli::chat_core::strip_markdown(&msg.content);
+                for text_line in cleaned.lines() {
+                    lines.push(Line::from(Span::styled(text_line.to_string(), theme::assistant_style())));
                 }
                 lines.push(Line::from(""));
             }
@@ -237,7 +248,7 @@ fn render_input(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(theme::DIM),
         ))
     } else {
-        Paragraph::new(Span::styled(&*app.input, theme::input_style()))
+        Paragraph::new(app.input.as_str()).style(theme::input_style())
     };
 
     let inner = block.inner(area);
@@ -275,11 +286,62 @@ fn render_input(frame: &mut Frame, app: &App, area: Rect) {
         frame.render_widget(popup, popup_area);
     }
 
-    // Set cursor position
+    // Render #agent suggestions popup above input
+    let agent_suggestions = app.get_agent_suggestions();
+    if !agent_suggestions.is_empty() && app.focus == Focus::Input {
+        let suggestions_height = agent_suggestions.len().min(6) as u16 + 2;
+        let popup_area = Rect {
+            x: area.x,
+            y: area.y.saturating_sub(suggestions_height),
+            width: area.width.min(30),
+            height: suggestions_height,
+        };
+
+        let items: Vec<Line> = agent_suggestions.iter().map(|name| {
+            Line::from(vec![
+                Span::styled(" 🤖 ", Style::default().fg(theme::DIM)),
+                Span::styled(name.as_str(), Style::default().fg(theme::WARNING)),
+            ])
+        }).collect();
+
+        let popup = Paragraph::new(items)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme::WARNING)));
+        frame.render_widget(popup, popup_area);
+    }
+
+    // Render @file suggestions popup above input
+    let file_suggestions = app.get_file_suggestions();
+    if !file_suggestions.is_empty() && app.focus == Focus::Input {
+        let suggestions_height = file_suggestions.len().min(8) as u16 + 2;
+        let popup_area = Rect {
+            x: area.x,
+            y: area.y.saturating_sub(suggestions_height),
+            width: area.width.min(50),
+            height: suggestions_height,
+        };
+
+        let items: Vec<Line> = file_suggestions.iter().map(|path| {
+            let icon = if path.ends_with('/') { "📁" } else { "📄" };
+            Line::from(vec![
+                Span::styled(format!(" {} ", icon), Style::default().fg(theme::DIM)),
+                Span::styled(path.as_str(), Style::default().fg(theme::ACCENT)),
+            ])
+        }).collect();
+
+        let popup = Paragraph::new(items)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(theme::ACCENT2)));
+        frame.render_widget(popup, popup_area);
+    }
+
+    // Set cursor position (multiline-aware)
     if app.focus == Focus::Input {
+        let before_cursor = &app.input[..app.cursor.min(app.input.len())];
+        let lines_before: Vec<&str> = before_cursor.split('\n').collect();
+        let cursor_row = lines_before.len() - 1;
+        let cursor_col = lines_before.last().map(|l| l.len()).unwrap_or(0);
         frame.set_cursor_position((
-            inner.x + app.cursor as u16,
-            inner.y,
+            inner.x + cursor_col as u16,
+            inner.y + cursor_row as u16,
         ));
     }
 }
