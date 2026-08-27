@@ -1,11 +1,13 @@
 # Mithril — Docker Compose deployment
 # Usage:
 #   docker compose up -d
+#   docker exec -it mithril bash   (to configure Kiro CLI login)
 #   Then point Junie/OpenCode to http://localhost:16180
 
 services:
   mithril:
     build: .
+    container_name: mithril
     ports:
       - "16180:16180"
     environment:
@@ -14,8 +16,10 @@ services:
       - MITHRIL_KEY_ANTHROPIC=${MITHRIL_KEY_ANTHROPIC:-}
       - MITHRIL_KEY_GROQ=${MITHRIL_KEY_GROQ:-}
     volumes:
-      # Mount your fellowship config
+      # Fellowship config (persists across restarts)
       - ./.mithril:/root/.mithril
+      # Kiro CLI credentials (persists login across restarts)
+      - ./.kiro-data:/root/.kiro
       # Mount project for file tools (optional)
       - ./:/workspace
     working_dir: /workspace
