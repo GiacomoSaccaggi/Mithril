@@ -242,7 +242,7 @@
                         </header>
                             <div class="report" style="background-color:WHITE">
                                 
-        <button id="darkToggle_ebd497e4" onclick="toggleDarkMode_ebd497e4()"
+        <button id="darkToggle_5ff7aa56" onclick="toggleDarkMode_5ff7aa56()"
             style="position:fixed;top:1rem;right:1rem;z-index:9999;
             background:var(--card);border:1px solid var(--border);border-radius:50%;
             width:40px;height:40px;cursor:pointer;font-size:1.2rem;
@@ -252,7 +252,7 @@
         (function() {
             var isDark = false;
             var root = document.documentElement;
-            var btn = document.getElementById('darkToggle_ebd497e4');
+            var btn = document.getElementById('darkToggle_5ff7aa56');
             var lightVars = {
                 '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
                 '--dim': '#64748b', '--border': '#e2e8f0',
@@ -261,7 +261,7 @@
                 '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
                 '--dim': '#94a3b8', '--border': '#334155',
             };
-            window.toggleDarkMode_ebd497e4 = function() {
+            window.toggleDarkMode_5ff7aa56 = function() {
                 isDark = !isDark;
                 var vars = isDark ? darkVars : lightVars;
                 Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
@@ -325,25 +325,20 @@ and gets access to your orchestrated team of models.</p>
     ORCH --> GPT(OpenAI)
     ORCH --> CLI(Kiro CLI)
     ORCH --> LOC(Local GGUF)</pre>
-</div><button class="collapsiblemygs">Guide: Multi-Agent Gemini via Mithril in Junie</button> <div class="content"><p>
+</div><button class="collapsiblemygs">Guide: Mithril + Junie (Local Install)</button> <div class="content"><p>
 <h3>Goal</h3>
-<p>Set up Mithril with multiple Gemini models as a multi-agent backend, then connect Junie to it.
-Junie sees "one model" but behind it you have specialized Gemini agents working together.</p>
+<p>Set up Mithril with multiple Gemini models as a multi-agent backend, then connect Junie to it locally.</p>
 
 <h3>Step 1: Install Mithril</h3>
 </p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Install</h4>
-<pre ><code class="language-bash"># macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
-
-# Or Docker
-docker pull ghcr.io/giacomosaccaggi/mithril:latest</code></pre>
+<h4>One-line install</h4>
+<pre ><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash</code></pre>
 </div><p><h3>Step 2: Get a Gemini API Key</h3></p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
 <h4>Set API key</h4>
 <pre ><code class="language-bash"># Get your key from https://aistudio.google.com/apikey
-mithril config set gemini &quot;AIzaSy...&quot;  </code></pre>
+mithril config set gemini &quot;AIzaSy...&quot; </code></pre>
 </div><p><h3>Step 3: Create a Multi-Agent Fellowship</h3></p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
 <h4>.mithril/fellowship.yaml</h4>
@@ -387,73 +382,177 @@ agents:
 # Output:
 #   Server http://localhost:16180
 #   Fellowship: gemini-multi (coder, reviewer, researcher)</code></pre>
-</div><p><h3>Step 5: Connect Junie</h3></p><p>
-<p>In your JetBrains IDE with Junie:</p>
+</div><p><h3>Step 5: Connect Junie</h3>
 <ol>
     <li>Open <strong>Settings → Junie → AI Provider</strong></li>
     <li>Select <strong>Ollama</strong> as the provider type</li>
     <li>Set URL: <code>http://localhost:16180</code></li>
     <li>Click "Refresh Models" — you'll see <code>gemini-multi:latest</code></li>
     <li>Select it as your model</li>
-    <li>Done! Junie now uses your multi-agent Gemini team</li>
+    <li>Done!</li>
 </ol>
+</p></div><button class="collapsiblemygs">Guide: Mithril + Junie via Docker (Local)</button> <div class="content"><p>
+<h3>Goal</h3>
+<p>Run Mithril as a Docker container on your machine. Useful if you don't want to install Rust or 
+manage the binary manually. Junie connects to the container the same way.</p>
 
-<h3>What Happens When You Ask Junie Something</h3>
-<ol>
-    <li>Junie sends your request to <code>http://localhost:16180/api/chat</code></li>
-    <li>Mithril's GGUF classifier reads it (~100ms, free)</li>
-    <li>Routes to the right agent:
-        <ul>
-            <li>"Fix this bug" → <strong>coder</strong> (Gemini Flash)</li>
-            <li>"Review this PR" → <strong>reviewer</strong> (Gemini Pro)</li>
-            <li>"How does this API work?" → <strong>researcher</strong> (Gemini Flash + web)</li>
-        </ul>
-    </li>
-    <li>Agent can use tools (read files, search web, etc.)</li>
-    <li>Agent can delegate: coder writes code → hands to reviewer → reviewer approves</li>
-    <li>Response streams back to Junie</li>
-</ol>
-</p><p><h3>Docker Alternative (for teams)</h3></p><div class="scomp-code-card">
+<h3>Step 1: Clone and Configure</h3>
+</p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Docker for teams</h4>
-<pre ><code class="language-bash"># docker-compose.yml already included in repo
-# Just set your Gemini key:
+<h4>Clone + fellowship config</h4>
+<pre ><code class="language-bash">git clone https://github.com/GiacomoSaccaggi/Mithril.git
+cd Mithril
+
+# Create your fellowship config
+mkdir -p .mithril
+cat &gt; .mithril/fellowship.yaml &lt;&lt; &#x27;EOF&#x27;
+name: &quot;my-team&quot;
+controller:
+  provider: gemini
+  model: gemini-2.5-flash
+  context_window: 2
+agents:
+  - name: coder
+    provider: gemini
+    model: gemini-2.5-flash
+    when: &quot;coding tasks&quot;
+    tools: [&quot;*&quot;]
+  - name: reviewer
+    provider: gemini
+    model: gemini-2.5-pro
+    when: &quot;code review&quot;
+    tools: [&quot;read_psi&quot;, &quot;grep_files&quot;]
+EOF</code></pre>
+</div><p>
+<p><strong>Note:</strong> In Docker mode we use <code>gemini</code> as the controller too (no local GGUF needed). 
+This costs fractions of a cent per classification but avoids downloading a 1.2GB model into the container.</p>
+
+<h3>Step 2: Set API Keys</h3>
+</p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>.env file</h4>
+<pre ><code class="language-bash"># Create .env file (Docker Compose reads it automatically)
 echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
 
-docker compose up -d
-# → http://localhost:16180 ready for all team members</code></pre>
-</div></div><button class="collapsiblemygs">Quick Start — Native Install</button> <div class="content"><div class="scomp-code-card">
+# Optional: add more providers
+echo &quot;MITHRIL_KEY_OPENAI=sk-...&quot; &gt;&gt; .env
+echo &quot;MITHRIL_KEY_ANTHROPIC=sk-ant-...&quot; &gt;&gt; .env</code></pre>
+</div><p><h3>Step 3: Start with Docker Compose</h3></p><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>4 commands to get started</h4>
-<pre ><code class="language-bash"># Install
-curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
+<h4>Start Docker</h4>
+<pre ><code class="language-bash">docker compose up -d
 
-# Set keys
-mithril config set gemini &quot;AIza...&quot;
-mithril config set openai &quot;sk-...&quot;   # optional
+# Check it&#x27;s running:
+curl http://localhost:16180/health
+# → {&quot;status&quot;:&quot;ok&quot;,&quot;version&quot;:&quot;0.4.0&quot;}
+
+# See your fellowship as a model:
+curl http://localhost:16180/api/tags
+# → {&quot;models&quot;: [..., {&quot;name&quot;: &quot;my-team:latest&quot;, &quot;details&quot;: {&quot;family&quot;: &quot;mithril-fellowship&quot;}}]}</code></pre>
+</div><p><h3>Step 4: Connect Junie</h3>
+<p>Same as local install:</p>
+<ol>
+    <li><strong>Settings → Junie → AI Provider → Ollama</strong></li>
+    <li>URL: <code>http://localhost:16180</code></li>
+    <li>Select <code>my-team:latest</code></li>
+    <li>Done!</li>
+</ol>
+</p></div><button class="collapsiblemygs">Guide: Mithril + Junie via Docker (Remote Server)</button> <div class="content"><p>
+<h3>Goal</h3>
+<p>Deploy Mithril on a server (AWS, GCP, your own VPS) so your entire team can share one orchestrated backend. 
+Everyone's Junie connects to the same URL.</p>
+
+<h3>Step 1: On the Server</h3>
+</p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>Server setup</h4>
+<pre ><code class="language-bash"># SSH into your server
+ssh user@your-server.com
+
+# Clone
+git clone https://github.com/GiacomoSaccaggi/Mithril.git
+cd Mithril
 
 # Create fellowship
-mithril fellowship init
+mkdir -p .mithril
+# ... (same fellowship.yaml as above)
 
-# Start
-mithril serve</code></pre>
+# Set API keys
+echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
+
+# Start (runs in background, restarts automatically)
+docker compose up -d
+
+# Verify
+curl http://localhost:16180/health</code></pre>
+</div><p><h3>Step 2: Expose the Port</h3></p><p>
+<p>Make port 16180 accessible from outside. Options:</p>
+<ul>
+    <li><strong>Direct:</strong> Open port 16180 in your firewall/security group</li>
+    <li><strong>Reverse proxy (recommended):</strong> Put nginx/caddy in front with HTTPS</li>
+    <li><strong>SSH tunnel:</strong> <code>ssh -L 16180:localhost:16180 user@server</code> (no firewall changes)</li>
+</ul>
+</p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>Expose the port</h4>
+<pre ><code class="language-bash"># Option A: Direct (open firewall)
+# In AWS Security Group: allow TCP 16180 from your IP
+
+# Option B: Nginx reverse proxy
+# /etc/nginx/sites-available/mithril
+server {
+    listen 443 ssl;
+    server_name mithril.yourcompany.com;
+    
+    ssl_certificate /etc/letsencrypt/live/mithril.yourcompany.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/mithril.yourcompany.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:16180;
+        proxy_http_version 1.1;
+        proxy_set_header Connection &#x27;&#x27;;
+        proxy_buffering off;  # Important for streaming!
+    }
+}
+
+# Option C: SSH tunnel (simplest, no server config needed)
+ssh -L 16180:localhost:16180 user@your-server.com</code></pre>
+</div><p><h3>Step 3: Connect Junie (everyone on the team)</h3>
+<ol>
+    <li><strong>Settings → Junie → AI Provider → Ollama</strong></li>
+    <li>URL: <code>http://your-server.com:16180</code> (or <code>https://mithril.yourcompany.com</code> with nginx)</li>
+    <li>Select your fellowship model</li>
+    <li>Everyone on the team uses the same URL → same orchestrated backend</li>
+</ol>
+
+<h3>Monitoring</h3>
+</p><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>Monitor your deployment</h4>
+<pre ><code class="language-bash"># Health check
+curl https://mithril.yourcompany.com/health
+
+# Prometheus metrics (for Grafana dashboards)
+curl https://mithril.yourcompany.com/metrics
+
+# Docker logs
+docker compose logs -f</code></pre>
 </div></div><button class="collapsiblemygs">Architecture Overview</button> <div class="content"><p>
 <h3>The Request Flow</h3>
 <ol>
     <li><strong>Client</strong> sends chat request to <code>/api/chat</code></li>
-    <li><strong>API Layer</strong> deserializes Ollama/OpenAI format</li>
-    <li><strong>GGUF Classifier</strong> — tiny local model decides which agent (~100ms, free)</li>
-    <li><strong>Agent</strong> executes with its provider + available tools</li>
-    <li><strong>Tool Loop</strong> — agent calls tools as needed</li>
-    <li><strong>Delegation</strong> — agent can hand off via NEXT/TASK</li>
-    <li><strong>Response</strong> streams back to client</li>
+    <li><strong>API Layer</strong> recognizes the fellowship model name</li>
+    <li><strong>Classifier</strong> decides which agent handles the task</li>
+    <li><strong>Agent</strong> executes with its provider + tools</li>
+    <li><strong>Auto-RAG</strong> injects relevant codebase context via Palantír index</li>
+    <li><strong>Response</strong> streams back token by token</li>
 </ol>
 
 <h3>Three Provider Types</h3>
 <ul>
-    <li><strong>Local GGUF:</strong> Free, private, used for routing. llama.cpp inference.</li>
-    <li><strong>Cloud API:</strong> Gemini, OpenAI, Anthropic, Groq. Pay-per-token via HTTP.</li>
-    <li><strong>CLI Tools:</strong> Kiro, Junie, any CLI with chat mode. Subprocess calls.</li>
+    <li><strong>Local GGUF:</strong> Free, private, used for routing (~100ms)</li>
+    <li><strong>Cloud API:</strong> Gemini, OpenAI, Anthropic, Groq (pay-per-token)</li>
+    <li><strong>CLI Tools:</strong> Kiro, Junie, any CLI with chat mode (subprocess)</li>
 </ul>
 </p></div>
                             </div>
