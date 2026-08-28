@@ -34,30 +34,6 @@ Function calling. The model can either respond with text OR request tool executi
 3. Add match arm in `create_provider()` in `mod.rs`
 4. Done — orchestrator, API, CLI all work automatically
 
-## Three Provider Types
-
-### 1. Local GGUF (free, private)
-Direct inference via llama.cpp. Used for the GGUF classifier/router. No network, no cost.
-
-### 2. Cloud API (Gemini, OpenAI, Anthropic, Groq)
-Standard HTTP calls to cloud endpoints. Each has its own request/response format but implements the same ChatProvider trait.
-
-### 3. CLI Tools (Kiro, Junie, etc.)
-Subprocess providers that invoke local CLI tools. Useful when you already have access to a CLI with its own authentication. The provider spawns the CLI process, sends the prompt, and parses the structured output.
-
-```yaml
-# Example: using Kiro CLI as a provider
-- name: reviewer
-  provider: kiro
-  model: claude-opus-4.6
-```
-
-To add a new CLI provider, create a file in `src/providers/` that:
-1. Spawns the CLI as a subprocess
-2. Passes the prompt as an argument
-3. Parses stdout for the response
-4. Implements the ChatProvider trait
-
 ## Files
 
 - `mod.rs` — ChatProvider trait, factory, retry_with_backoff

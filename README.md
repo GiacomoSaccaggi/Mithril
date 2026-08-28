@@ -100,6 +100,7 @@ graph TB
     subgraph "CLI Providers"
         K[Kiro]
         JN[Junie]
+        COP[Copilot]
         ANY[Any CLI]
     end
 
@@ -119,6 +120,7 @@ graph TB
     ORCH --> LOCAL
     ORCH --> K
     ORCH --> JN
+    ORCH --> COP
     ORCH --> ANY
     ORCH --> TOOLS
 ```
@@ -297,9 +299,9 @@ Mithril supports three types of providers:
 
 | Type | Examples | How It Works |
 |------|----------|--------------|
-| **Local GGUF** | qwen-1.5b, llama-8b | Direct inference via llama.cpp (free, private, fast for routing) |
+| **Local GGUF** | qwen-1.5b, qwen-14b, llama-8b | Direct inference via llama.cpp (free, private, fast for routing) |
 | **Cloud API** | Gemini, OpenAI, Anthropic, Groq | HTTP calls to cloud LLM endpoints (pay-per-token) |
-| **CLI Tools** | Kiro, Junie, any CLI with chat | Subprocess calls to local CLI tools that have their own model access |
+| **CLI Tools** | Kiro, Junie, Copilot, any CLI | Subprocess calls to local CLI tools that have their own model access |
 
 ```yaml
 # .mithril/fellowship.yaml
@@ -319,9 +321,19 @@ agents:
   - name: reviewer
     provider: kiro
     model: claude-opus-4.6
+
+  # GitHub Copilot CLI (2000 credits/month)
+  - name: specialist
+    provider: copilot
+    model: gpt-5.4
+
+  # Local GGUF (free, private, offline)
+  - name: local-coder
+    provider: local
+    model: qwen-14b
 ```
 
-CLI providers are useful when you have access to tools like Kiro or other AI CLIs with their own authentication and model access. Mithril orchestrates them as part of your fellowship without needing separate API keys.
+CLI providers are useful when you have access to tools like Kiro, Junie, or GitHub Copilot with their own authentication and model access. Mithril orchestrates them as part of your fellowship without needing separate API keys. Each CLI tool has its own credit budget — use them strategically for complex tasks while Gemini handles the bulk.
 
 > **Note on the controller:** The controller (classifier/router) defaults to a local GGUF model which is free, fast (~100ms), and private. You can technically use any provider as controller (e.g., `provider: gemini`), but it's not worth the cost unless you have a very large agent structure where precise routing justifies paying per-classification.
 

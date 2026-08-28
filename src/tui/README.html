@@ -80,7 +80,7 @@
               background-position:center;
               background-repeat:no-repeat;
               background-size:cover;
-              background-image:url(../../img/bg3.jpg);
+              background-image:url(https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80);
               height:50%;
               width:100%;
               color:white;
@@ -242,7 +242,7 @@
                         </header>
                             <div class="report" style="background-color:WHITE">
                                 
-        <button id="darkToggle_caba8c6f" onclick="toggleDarkMode_caba8c6f()"
+        <button id="darkToggle_146de15e" onclick="toggleDarkMode_146de15e()"
             style="position:fixed;top:1rem;right:1rem;z-index:9999;
             background:var(--card);border:1px solid var(--border);border-radius:50%;
             width:40px;height:40px;cursor:pointer;font-size:1.2rem;
@@ -252,7 +252,7 @@
         (function() {
             var isDark = false;
             var root = document.documentElement;
-            var btn = document.getElementById('darkToggle_caba8c6f');
+            var btn = document.getElementById('darkToggle_146de15e');
             var lightVars = {
                 '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
                 '--dim': '#64748b', '--border': '#e2e8f0',
@@ -261,7 +261,7 @@
                 '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
                 '--dim': '#94a3b8', '--border': '#334155',
             };
-            window.toggleDarkMode_caba8c6f = function() {
+            window.toggleDarkMode_146de15e = function() {
                 isDark = !isDark;
                 var vars = isDark ? darkVars : lightVars;
                 Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });

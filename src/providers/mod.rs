@@ -23,6 +23,8 @@
 #![allow(dead_code)]
 mod local;
 pub mod kiro;
+pub mod copilot;
+pub mod junie;
 mod gemini;
 mod openai;
 mod anthropic;
@@ -185,6 +187,16 @@ pub fn create_provider_with_model(
     config: &crate::config::MithrilConfig,
 ) -> Result<Box<dyn ChatProvider>> {
     match name {
+        "junie" => {
+            // JetBrains Junie CLI — no API key needed (uses JetBrains auth)
+            let model = model_override.unwrap_or("auto");
+            Ok(Box::new(junie::JunieProvider::new(model)))
+        }
+        "copilot" => {
+            // GitHub Copilot CLI — no API key needed (uses gh auth)
+            let model = model_override.unwrap_or("gpt-4o");
+            Ok(Box::new(copilot::CopilotProvider::new(model)))
+        }
         "kiro" => {
             // Kiro CLI provider — no API key needed (uses kiro-cli auth)
             let model = model_override.unwrap_or("claude-sonnet-4");

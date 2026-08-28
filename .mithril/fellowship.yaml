@@ -1,34 +1,32 @@
-# Mithril Fellowship — GGUF Entry Classifier + Agent Free-Flow
-# GGUF routes entry, agents collaborate via NEXT:/TASK: protocol
-
-name: "mithril-dev"
-description: "Development fellowship for Mithril project"
+name: "kiro-gemini"
+description: "Kiro worker + Gemini planner/reviewer"
 
 controller:
-  provider: local
-  model: qwen-1.5b
+  provider: gemini
+  model: gemini-2.5-flash
   context_window: 2
 
-max_rounds: 15
-token_budget: 50000
-
 agents:
-  - name: "worker"
+  - name: planner
     provider: gemini
-    model: gemini-3.6-flash
-    role: "General worker. Codes, analyzes, explains, implements."
-    when: "any coding, analysis, or implementation task"
-    can_call: ["reviewer", "gguf"]
+    model: gemini-2.5-flash
+    role: "Plans tasks and breaks them into steps"
+    when: "planning, task breakdown, architecture decisions"
+    can_call: [worker]
+    tools: []
+
+  - name: worker
+    provider: kiro
+    model: claude-sonnet-4.6
+    role: "Implements code changes and features"
+    when: "coding tasks, implementations, bug fixes"
+    can_call: [reviewer]
     tools: ["*"]
 
-  - name: "reviewer"
+  - name: reviewer
     provider: gemini
-    model: gemini-2.5-pro
-    role: "Senior reviewer. Deep analysis and quality checks. EXPENSIVE."
-    when: "explicit review request or complex architecture decisions"
-    can_call: ["worker"]
+    model: gemini-2.5-flash
+    role: "Reviews code for bugs and quality"
+    when: "code review, quality checks"
+    can_call: []
     tools: ["read_psi", "grep_files", "git_diff"]
-
-token_tracking:
-  enabled: true
-  show_per_agent: true

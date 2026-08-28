@@ -242,7 +242,7 @@
                         </header>
                             <div class="report" style="background-color:WHITE">
                                 
-        <button id="darkToggle_5ff7aa56" onclick="toggleDarkMode_5ff7aa56()"
+        <button id="darkToggle_b484b8d2" onclick="toggleDarkMode_b484b8d2()"
             style="position:fixed;top:1rem;right:1rem;z-index:9999;
             background:var(--card);border:1px solid var(--border);border-radius:50%;
             width:40px;height:40px;cursor:pointer;font-size:1.2rem;
@@ -252,7 +252,7 @@
         (function() {
             var isDark = false;
             var root = document.documentElement;
-            var btn = document.getElementById('darkToggle_5ff7aa56');
+            var btn = document.getElementById('darkToggle_b484b8d2');
             var lightVars = {
                 '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
                 '--dim': '#64748b', '--border': '#e2e8f0',
@@ -261,7 +261,7 @@
                 '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
                 '--dim': '#94a3b8', '--border': '#334155',
             };
-            window.toggleDarkMode_5ff7aa56 = function() {
+            window.toggleDarkMode_b484b8d2 = function() {
                 isDark = !isDark;
                 var vars = isDark ? darkVars : lightVars;
                 Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
@@ -288,11 +288,11 @@
             </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Protocols</div>
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    Ollama + OpenAI + MCP
+                    8
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">compatible with any client</div>
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Local + Cloud + CLI</div>
             </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
@@ -304,16 +304,16 @@
             </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Models</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    6
+                    ∞
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Local + Cloud + CLI</div>
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Gemini, GPT, Claude, GGUF, Copilot, Junie</div>
             </div></div><h2>What is Mithril?</h2><p>
 <p style="font-size:1.1rem;">Mithril is a <strong>multi-model orchestration engine</strong>. You define a team of AI models 
 (a "fellowship"), and Mithril exposes them as a single Ollama-compatible API endpoint.</p>
 <p>Any tool that speaks Ollama — <strong>Junie, OpenCode, Open WebUI, LangChain</strong> — connects to Mithril 
-and gets access to your orchestrated team of models.</p>
+and gets access to your orchestrated team.</p>
 </p><div class="scomp-mermaid-card">
 <h4>How It Works</h4>
 <pre class="mermaid">flowchart LR
@@ -323,237 +323,89 @@ and gets access to your orchestrated team of models.</p>
     API --> ORCH(Orchestrator)
     ORCH --> GEM(Gemini)
     ORCH --> GPT(OpenAI)
-    ORCH --> CLI(Kiro CLI)
+    ORCH --> COP(Copilot CLI)
     ORCH --> LOC(Local GGUF)</pre>
-</div><button class="collapsiblemygs">Guide: Mithril + Junie (Local Install)</button> <div class="content"><p>
-<h3>Goal</h3>
-<p>Set up Mithril with multiple Gemini models as a multi-agent backend, then connect Junie to it locally.</p>
-
-<h3>Step 1: Install Mithril</h3>
-</p><div class="scomp-code-card">
+</div><button class="collapsiblemygs">Guide: Mithril + Junie (Local Install)</button> <div class="content"><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>One-line install</h4>
-<pre ><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash</code></pre>
-</div><p><h3>Step 2: Get a Gemini API Key</h3></p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Set API key</h4>
-<pre ><code class="language-bash"># Get your key from https://aistudio.google.com/apikey
-mithril config set gemini &quot;AIzaSy...&quot; </code></pre>
-</div><p><h3>Step 3: Create a Multi-Agent Fellowship</h3></p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>.mithril/fellowship.yaml</h4>
-<pre ><code class="language-yaml"># Create .mithril/fellowship.yaml in your project:
+<h4>Complete setup</h4>
+<pre ><code class="language-bash"># 1. Install
+curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
 
-name: &quot;gemini-multi&quot;
-description: &quot;Multi-agent Gemini team&quot;
+# 2. Set API key
+mithril config set gemini &quot;AIzaSy...&quot;
 
+# 3. Download local model (optional, for free routing)
+mithril download-model --model qwen-1.5b
+# Or for local coding: mithril download-model --model qwen-14b
+
+# 4. Create fellowship
+cat &gt; .mithril/fellowship.yaml &lt;&lt; &#x27;EOF&#x27;
+name: &quot;smart-team&quot;
 controller:
   provider: local
-  model: qwen-1.5b     # Free local router
-
-agents:
-  - name: coder
-    provider: gemini
-    model: gemini-2.5-flash
-    role: &quot;Fast coder — implements features quickly&quot;
-    when: &quot;coding tasks, implementations, bug fixes&quot;
-    can_call: [reviewer]
-    tools: [&quot;*&quot;]
-
-  - name: reviewer
-    provider: gemini
-    model: gemini-2.5-pro
-    role: &quot;Senior reviewer — catches bugs and architecture issues&quot;
-    when: &quot;code review, complex logic analysis&quot;
-    can_call: []
-    tools: [&quot;read_psi&quot;, &quot;grep_files&quot;, &quot;git_diff&quot;]
-
-  - name: researcher
-    provider: gemini
-    model: gemini-2.5-flash
-    role: &quot;Researcher — searches web and documentation&quot;
-    when: &quot;questions about APIs, libraries, documentation&quot;
-    can_call: []
-    tools: [&quot;web_search&quot;, &quot;fetch_page&quot;]</code></pre>
-</div><p><h3>Step 4: Start Mithril</h3></p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Start the engine</h4>
-<pre ><code class="language-bash">mithril serve
-# Output:
-#   Server http://localhost:16180
-#   Fellowship: gemini-multi (coder, reviewer, researcher)</code></pre>
-</div><p><h3>Step 5: Connect Junie</h3>
-<ol>
-    <li>Open <strong>Settings → Junie → AI Provider</strong></li>
-    <li>Select <strong>Ollama</strong> as the provider type</li>
-    <li>Set URL: <code>http://localhost:16180</code></li>
-    <li>Click "Refresh Models" — you'll see <code>gemini-multi:latest</code></li>
-    <li>Select it as your model</li>
-    <li>Done!</li>
-</ol>
-</p></div><button class="collapsiblemygs">Guide: Mithril + Junie via Docker (Local)</button> <div class="content"><p>
-<h3>Goal</h3>
-<p>Run Mithril as a Docker container on your machine. Useful if you don't want to install Rust or 
-manage the binary manually. Junie connects to the container the same way.</p>
-
-<h3>Step 1: Clone and Configure</h3>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Clone + fellowship config</h4>
-<pre ><code class="language-bash">git clone https://github.com/GiacomoSaccaggi/Mithril.git
-cd Mithril
-
-# Create your fellowship config
-mkdir -p .mithril
-cat &gt; .mithril/fellowship.yaml &lt;&lt; &#x27;EOF&#x27;
-name: &quot;my-team&quot;
-controller:
-  provider: gemini
-  model: gemini-2.5-flash
-  context_window: 2
+  model: qwen-1.5b
 agents:
   - name: coder
     provider: gemini
     model: gemini-2.5-flash
     when: &quot;coding tasks&quot;
+    can_call: [specialist]
     tools: [&quot;*&quot;]
-  - name: reviewer
-    provider: gemini
-    model: gemini-2.5-pro
-    when: &quot;code review&quot;
-    tools: [&quot;read_psi&quot;, &quot;grep_files&quot;]
-EOF</code></pre>
-</div><p>
-<p><strong>Note:</strong> In Docker mode we use <code>gemini</code> as the controller too (no local GGUF needed). 
-This costs fractions of a cent per classification but avoids downloading a 1.2GB model into the container.</p>
+  - name: specialist
+    provider: copilot
+    model: gpt-5.4
+    when: &quot;complex architecture, hard bugs&quot;
+    tools: [&quot;*&quot;]
+  - name: local-coder
+    provider: local
+    model: qwen-14b
+    when: &quot;quick offline edits&quot;
+    tools: [&quot;read_psi&quot;, &quot;write_file&quot;, &quot;edit_file&quot;]
+EOF
 
-<h3>Step 2: Set API Keys</h3>
-</p><div class="scomp-code-card">
+# 5. Start
+mithril serve
+
+# 6. Connect Junie: Settings → Ollama → http://localhost:16180</code></pre>
+</div></div><button class="collapsiblemygs">Guide: Docker (Local or Remote Server)</button> <div class="content"><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
-<h4>.env file</h4>
-<pre ><code class="language-bash"># Create .env file (Docker Compose reads it automatically)
+<h4>Docker deployment</h4>
+<pre ><code class="language-bash"># Local Docker
+./docker-setup.sh
 echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
+docker compose up -d
+# → http://localhost:16180
 
-# Optional: add more providers
-echo &quot;MITHRIL_KEY_OPENAI=sk-...&quot; &gt;&gt; .env
-echo &quot;MITHRIL_KEY_ANTHROPIC=sk-ant-...&quot; &gt;&gt; .env</code></pre>
-</div><p><h3>Step 3: Start with Docker Compose</h3></p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Start Docker</h4>
-<pre ><code class="language-bash">docker compose up -d
-
-# Check it&#x27;s running:
-curl http://localhost:16180/health
-# → {&quot;status&quot;:&quot;ok&quot;,&quot;version&quot;:&quot;0.4.0&quot;}
-
-# See your fellowship as a model:
-curl http://localhost:16180/api/tags
-# → {&quot;models&quot;: [..., {&quot;name&quot;: &quot;my-team:latest&quot;, &quot;details&quot;: {&quot;family&quot;: &quot;mithril-fellowship&quot;}}]}</code></pre>
-</div><p><h3>Step 4: Connect Junie</h3>
-<p>Same as local install:</p>
-<ol>
-    <li><strong>Settings → Junie → AI Provider → Ollama</strong></li>
-    <li>URL: <code>http://localhost:16180</code></li>
-    <li>Select <code>my-team:latest</code></li>
-    <li>Done!</li>
-</ol>
-</p></div><button class="collapsiblemygs">Guide: Mithril + Junie via Docker (Remote Server)</button> <div class="content"><p>
-<h3>Goal</h3>
-<p>Deploy Mithril on a server (AWS, GCP, your own VPS) so your entire team can share one orchestrated backend. 
-Everyone's Junie connects to the same URL.</p>
-
-<h3>Step 1: On the Server</h3>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Server setup</h4>
-<pre ><code class="language-bash"># SSH into your server
-ssh user@your-server.com
-
-# Clone
-git clone https://github.com/GiacomoSaccaggi/Mithril.git
-cd Mithril
-
-# Create fellowship
-mkdir -p .mithril
-# ... (same fellowship.yaml as above)
-
-# Set API keys
+# Remote server
+ssh user@server
+git clone https://github.com/GiacomoSaccaggi/Mithril.git &amp;&amp; cd Mithril
 echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
-
-# Start (runs in background, restarts automatically)
 docker compose up -d
 
-# Verify
-curl http://localhost:16180/health</code></pre>
-</div><p><h3>Step 2: Expose the Port</h3></p><p>
-<p>Make port 16180 accessible from outside. Options:</p>
-<ul>
-    <li><strong>Direct:</strong> Open port 16180 in your firewall/security group</li>
-    <li><strong>Reverse proxy (recommended):</strong> Put nginx/caddy in front with HTTPS</li>
-    <li><strong>SSH tunnel:</strong> <code>ssh -L 16180:localhost:16180 user@server</code> (no firewall changes)</li>
-</ul>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Expose the port</h4>
-<pre ><code class="language-bash"># Option A: Direct (open firewall)
-# In AWS Security Group: allow TCP 16180 from your IP
-
-# Option B: Nginx reverse proxy
-# /etc/nginx/sites-available/mithril
-server {
-    listen 443 ssl;
-    server_name mithril.yourcompany.com;
-    
-    ssl_certificate /etc/letsencrypt/live/mithril.yourcompany.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/mithril.yourcompany.com/privkey.pem;
-    
-    location / {
-        proxy_pass http://localhost:16180;
-        proxy_http_version 1.1;
-        proxy_set_header Connection &#x27;&#x27;;
-        proxy_buffering off;  # Important for streaming!
-    }
-}
-
-# Option C: SSH tunnel (simplest, no server config needed)
-ssh -L 16180:localhost:16180 user@your-server.com</code></pre>
-</div><p><h3>Step 3: Connect Junie (everyone on the team)</h3>
+# Connect: Junie → Ollama → http://server:16180</code></pre>
+</div></div><button class="collapsiblemygs">All 8 Providers</button> <div class="content"><p>
+<table style="width:100%;font-size:.85rem;border-collapse:collapse;">
+<tr style="border-bottom:2px solid var(--border);"><th>Provider</th><th>Type</th><th>Auth</th><th>Cost</th><th>Best For</th></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>local</code></td><td>GGUF</td><td>None</td><td>Free</td><td>Routing, offline coding (qwen-14b)</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>gemini</code></td><td>Cloud</td><td>API key</td><td>$$$</td><td>Main workhorse (cheap + fast)</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>openai</code></td><td>Cloud</td><td>API key</td><td>$$$$</td><td>GPT-4o, o1 reasoning</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>anthropic</code></td><td>Cloud</td><td>API key</td><td>$$$$</td><td>Claude for careful analysis</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>groq</code></td><td>Cloud</td><td>API key</td><td>$$</td><td>Fast inference (Llama, Mixtral)</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>kiro</code></td><td>CLI</td><td>AWS Builder ID</td><td>Credits</td><td>Claude Opus/Sonnet via Kiro</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>copilot</code></td><td>CLI</td><td>gh auth</td><td>2000/mo</td><td>GPT-5.4, cross-platform</td></tr>
+<tr><td><code>junie</code></td><td>CLI</td><td>JetBrains</td><td>10 credits</td><td>Fable-5, integrated tools</td></tr>
+</table>
+</p></div><button class="collapsiblemygs">Architecture</button> <div class="content"><p>
+<h3>Request Flow</h3>
 <ol>
-    <li><strong>Settings → Junie → AI Provider → Ollama</strong></li>
-    <li>URL: <code>http://your-server.com:16180</code> (or <code>https://mithril.yourcompany.com</code> with nginx)</li>
-    <li>Select your fellowship model</li>
-    <li>Everyone on the team uses the same URL → same orchestrated backend</li>
+    <li>Client sends chat request</li>
+    <li>GGUF classifier picks the right agent (free, ~100ms)</li>
+    <li>Agent executes with its provider + 24 tools</li>
+    <li>Auto-RAG injects relevant codebase context</li>
+    <li>Response streams back</li>
 </ol>
-
-<h3>Monitoring</h3>
-</p><div class="scomp-code-card">
-<button class="scomp-copy-btn">⧉ Copy</button>
-<h4>Monitor your deployment</h4>
-<pre ><code class="language-bash"># Health check
-curl https://mithril.yourcompany.com/health
-
-# Prometheus metrics (for Grafana dashboards)
-curl https://mithril.yourcompany.com/metrics
-
-# Docker logs
-docker compose logs -f</code></pre>
-</div></div><button class="collapsiblemygs">Architecture Overview</button> <div class="content"><p>
-<h3>The Request Flow</h3>
-<ol>
-    <li><strong>Client</strong> sends chat request to <code>/api/chat</code></li>
-    <li><strong>API Layer</strong> recognizes the fellowship model name</li>
-    <li><strong>Classifier</strong> decides which agent handles the task</li>
-    <li><strong>Agent</strong> executes with its provider + tools</li>
-    <li><strong>Auto-RAG</strong> injects relevant codebase context via Palantír index</li>
-    <li><strong>Response</strong> streams back token by token</li>
-</ol>
-
-<h3>Three Provider Types</h3>
-<ul>
-    <li><strong>Local GGUF:</strong> Free, private, used for routing (~100ms)</li>
-    <li><strong>Cloud API:</strong> Gemini, OpenAI, Anthropic, Groq (pay-per-token)</li>
-    <li><strong>CLI Tools:</strong> Kiro, Junie, any CLI with chat mode (subprocess)</li>
-</ul>
+<h3>Smart Budget Strategy</h3>
+<p>Use Gemini for 90% of work (cheap). Local qwen-14b for offline/private. Copilot/Junie only for tasks that need GPT-5.4 or Fable-5. Your 2000 Copilot credits last the whole month.</p>
 </p></div>
                             </div>
                             

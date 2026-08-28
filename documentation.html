@@ -80,7 +80,7 @@
               background-position:center;
               background-repeat:no-repeat;
               background-size:cover;
-              background-image:url(img/bg3.jpg);
+              background-image:url(img/bg2.jpeg);
               height:50%;
               width:100%;
               color:white;
@@ -242,7 +242,7 @@
                         </header>
                             <div class="report" style="background-color:WHITE">
                                 
-        <button id="darkToggle_fbc19813" onclick="toggleDarkMode_fbc19813()"
+        <button id="darkToggle_4907c81a" onclick="toggleDarkMode_4907c81a()"
             style="position:fixed;top:1rem;right:1rem;z-index:9999;
             background:var(--card);border:1px solid var(--border);border-radius:50%;
             width:40px;height:40px;cursor:pointer;font-size:1.2rem;
@@ -252,7 +252,7 @@
         (function() {
             var isDark = false;
             var root = document.documentElement;
-            var btn = document.getElementById('darkToggle_fbc19813');
+            var btn = document.getElementById('darkToggle_4907c81a');
             var lightVars = {
                 '--bg': '#ffffff', '--card': '#f8fafc', '--text': '#1e293b',
                 '--dim': '#64748b', '--border': '#e2e8f0',
@@ -261,7 +261,7 @@
                 '--bg': '#0f172a', '--card': '#1e293b', '--text': '#e2e8f0',
                 '--dim': '#94a3b8', '--border': '#334155',
             };
-            window.toggleDarkMode_fbc19813 = function() {
+            window.toggleDarkMode_4907c81a = function() {
                 isDark = !isDark;
                 var vars = isDark ? darkVars : lightVars;
                 Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
@@ -288,21 +288,20 @@
             </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
-                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Architecture</div>
+                    letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    getting-started.html
+                    8
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">overview & quick start</div>
-            </div></div><h2>Module Documentation</h2><p><p>Each source module has a <code>README.html</code> (interactive) and <code>README.md</code> (for GitHub/IDE). Click to open:</p></p><p><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1rem 0;">
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Local + Cloud + CLI</div>
+            </div></div><h2>Module Documentation</h2><p><p>Each source module has a <code>README.html</code> (interactive) and <code>README.md</code> (for GitHub/IDE).</p></p><p><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1rem 0;">
     <a href="src/providers/README.html" style="text-decoration:none;color:inherit;">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
             padding:1.2rem;transition:all .2s;cursor:pointer;"
             onmouseover="this.style.borderColor='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🧙</div>
-            <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Providers — The Five Wizards</div>
-            <div style="font-size:.85rem;color:var(--dim);">LLM API adapters (Gemini, OpenAI, Anthropic, Groq, Local)</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/providers/README.html</div>
+            <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Providers — 8 Wizards</div>
+            <div style="font-size:.85rem;color:var(--dim);">Local GGUF + Cloud API + CLI (Kiro, Copilot, Junie)</div>
         </div>
     </a>
     <a href="src/flow/README.html" style="text-decoration:none;color:inherit;">
@@ -311,9 +310,8 @@
             onmouseover="this.style.borderColor='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🧝</div>
-            <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Flow — Orchestration Council</div>
+            <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Flow — Orchestration</div>
             <div style="font-size:.85rem;color:var(--dim);">Multi-agent routing, GGUF classifier, NEXT/TASK protocol</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/flow/README.html</div>
         </div>
     </a>
     <a href="src/tools/README.html" style="text-decoration:none;color:inherit;">
@@ -324,7 +322,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🛡️</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Tools — The Armory</div>
             <div style="font-size:.85rem;color:var(--dim);">24 executable tools (file, git, web, code, terminal)</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/tools/README.html</div>
         </div>
     </a>
     <a href="src/api/README.html" style="text-decoration:none;color:inherit;">
@@ -335,7 +332,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🏰</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">API — Beacon Towers</div>
             <div style="font-size:.85rem;color:var(--dim);">Ollama + OpenAI + MCP HTTP server</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/api/README.html</div>
         </div>
     </a>
     <a href="src/engine/README.html" style="text-decoration:none;color:inherit;">
@@ -345,8 +341,7 @@
             onmouseout="this.style.borderColor='var(--border)'">
             <div style="font-size:1.5rem;margin-bottom:.5rem;">⛏️</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Engine — Khazad-dûm</div>
-            <div style="font-size:.85rem;color:var(--dim);">Local GGUF inference, Metal GPU, token streaming</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/engine/README.html</div>
+            <div style="font-size:.85rem;color:var(--dim);">Local GGUF inference (qwen-14b), Metal GPU, streaming</div>
         </div>
     </a>
     <a href="src/operators/README.html" style="text-decoration:none;color:inherit;">
@@ -357,7 +352,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🗡️</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Operators — Rangers</div>
             <div style="font-size:.85rem;color:var(--dim);">Secure I/O: sandboxed terminal, path protection, shadow undo</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/operators/README.html</div>
         </div>
     </a>
     <a href="src/cli/README.html" style="text-decoration:none;color:inherit;">
@@ -368,7 +362,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">⚔️</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">CLI — Fellowship's Voice</div>
             <div style="font-size:.85rem;color:var(--dim);">REPL + centralized commands via ChatCore</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/cli/README.html</div>
         </div>
     </a>
     <a href="src/tui/README.html" style="text-decoration:none;color:inherit;">
@@ -379,7 +372,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🏛️</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">TUI — Minas Tirith</div>
             <div style="font-size:.85rem;color:var(--dim);">Full-screen interface with popups and panels</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/tui/README.html</div>
         </div>
     </a>
     <a href="src/config/README.html" style="text-decoration:none;color:inherit;">
@@ -390,7 +382,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🔐</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Config — The Vaults</div>
             <div style="font-size:.85rem;color:var(--dim);">Argon2id encryption, env var fallback, permissions</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/config/README.html</div>
         </div>
     </a>
     <a href="src/session/README.html" style="text-decoration:none;color:inherit;">
@@ -401,7 +392,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">📜</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Session — Chronicles</div>
             <div style="font-size:.85rem;color:var(--dim);">Persistent conversations, multi-frontend handoff</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/session/README.html</div>
         </div>
     </a>
     <a href="src/index/README.html" style="text-decoration:none;color:inherit;">
@@ -412,7 +402,6 @@
             <div style="font-size:1.5rem;margin-bottom:.5rem;">🔮</div>
             <div style="font-weight:700;color:var(--accent);margin-bottom:.3rem;">Index — The Palantír</div>
             <div style="font-size:.85rem;color:var(--dim);">BM25 search for context injection</div>
-            <div style="font-size:.7rem;color:var(--dim);margin-top:.5rem;">src/index/README.html</div>
         </div>
     </a></div></p><h2>Other Resources</h2><p>
 <ul>
@@ -420,6 +409,7 @@
     <li><a href="README.md">README.md</a> — Project overview</li>
     <li><a href="CONTRIBUTING.md">CONTRIBUTING.md</a> — How to contribute</li>
     <li><a href="Dockerfile">Dockerfile</a> — Docker deployment</li>
+    <li><a href="docker-setup.sh">docker-setup.sh</a> — One-command Docker setup</li>
 </ul>
 </p>
                             </div>

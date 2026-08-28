@@ -34,6 +34,16 @@ pub const MODELS: &[ModelInfo] = &[
         chat_template: ChatTemplate::ChatML,
     },
     ModelInfo {
+        id: "qwen-14b",
+        display_name: "Qwen 2.5 Coder 14B (Best local coder, ~9GB)",
+        file_name: "qwen2.5-coder-14b-instruct-q4_k_m.gguf",
+        download_url: "https://huggingface.co/Qwen/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/qwen2.5-coder-14b-instruct-q4_k_m.gguf",
+        family: "qwen2",
+        parameter_size: "14B",
+        quantization: "Q4_K_M",
+        chat_template: ChatTemplate::ChatML,
+    },
+    ModelInfo {
         id: "llama-8b",
         display_name: "Llama 3.1 8B Instruct (All-rounder, ~5GB)",
         file_name: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",

@@ -16,10 +16,10 @@ COPY . .
 RUN cargo build --release
 
 # Stage 2: Runtime
-FROM debian:bookworm-slim
+FROM debian:sid-slim
 
 RUN apt-get update && apt-get install -y \
-    ca-certificates libssl3 curl git \
+    ca-certificates libssl3 curl git libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Mithril

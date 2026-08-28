@@ -36,3 +36,8 @@ secrets
 # Test artifacts
 *.profraw
 lcov.info
+
+# Secrets
+.env
+.mithril/config.yaml
+.kiro-data/
