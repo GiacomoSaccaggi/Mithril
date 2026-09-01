@@ -8,7 +8,7 @@
 FROM rust:latest AS builder
 
 RUN apt-get update && apt-get install -y \
-    cmake g++ pkg-config libssl-dev libclang-dev \
+    cmake g++ pkg-config libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -16,10 +16,10 @@ COPY . .
 RUN cargo build --release
 
 # Stage 2: Runtime
-FROM debian:sid-slim
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y \
-    ca-certificates libssl3 curl git libgomp1 \
+    ca-certificates curl git libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Mithril

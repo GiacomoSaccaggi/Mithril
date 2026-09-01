@@ -16,9 +16,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y cmake
       - run: cargo check --all-targets
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+      - name: Check musl static compilation
+        run: cross check --target x86_64-unknown-linux-musl
 
   test:
     name: Test

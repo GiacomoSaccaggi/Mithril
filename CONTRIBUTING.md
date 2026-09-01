@@ -27,7 +27,7 @@ cd mithril
 
 # Install the tools of the Dwarves
 brew install cmake  # macOS
-# or: sudo apt install build-essential cmake  # Linux
+# or: sudo apt install build-essential cmake musl-tools  # Linux
 
 # Forge the artifact
 cargo build --release

@@ -9,7 +9,8 @@
             <meta name="author" content="Mithril Project">
             
                             <title>Mithril — Getting Started & Architecture Guide</title>
-                            
+                        
+
             <link rel="shortcut icon" href="" />
             <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
             <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/css/select2.min.css" rel="stylesheet"/>
@@ -325,11 +326,31 @@ and gets access to your orchestrated team.</p>
     ORCH --> GPT(OpenAI)
     ORCH --> COP(Copilot CLI)
     ORCH --> LOC(Local GGUF)</pre>
-</div><button class="collapsiblemygs">Guide: Mithril + Junie (Local Install)</button> <div class="content"><div class="scomp-code-card">
+</div><button class="collapsiblemygs">Guide: Installation Options (Curl, Pip, Homebrew)</button> <div class="content"><div class="scomp-code-card">
+<button class="scomp-copy-btn">⧉ Copy</button>
+<h4>1. Universal Static Installer (Linux &amp; macOS)</h4>
+<pre><code class="language-bash"># Universal static zero-dependency binary with automatic PATH configuration:
+curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash</code></pre>
+
+<h4>2. Python / Jupyter / Conda (PyPI)</h4>
+<pre><code class="language-bash"># Direct pip install into active Python / Conda environment or Jupyter Notebook:
+pip install mithril-ai
+mithril --version</code></pre>
+
+<h4>3. Homebrew (macOS &amp; Linux)</h4>
+<pre><code class="language-bash"># Install via official tap:
+brew install GiacomoSaccaggi/tap/mithril
+# or:
+brew tap giacomosaccaggi/tap &amp;&amp; brew install mithril</code></pre>
+</div></div><button class="collapsiblemygs">Guide: Mithril + Junie (Local Setup)</button> <div class="content"><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
 <h4>Complete setup</h4>
-<pre ><code class="language-bash"># 1. Install
+<pre ><code class="language-bash"># 1. Install (via curl one-liner, pip, or brew)
 curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
+# Or in Python / Jupyter environments:
+# pip install mithril-ai
+# Or via Homebrew:
+# brew install GiacomoSaccaggi/tap/mithril
 
 # 2. Set API key
 mithril config set gemini &quot;AIzaSy...&quot;
