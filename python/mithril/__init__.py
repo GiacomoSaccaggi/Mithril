@@ -12,7 +12,7 @@ try:
     from importlib.metadata import version
     __version__ = version("mithril-ai")
 except Exception:
-    __version__ = "0.5.2"
+    __version__ = "0.5.3"
 
 __all__ = ["main", "find_mithril_binary", "__version__"]
 

@@ -1,6 +1,6 @@
 [package]
 name = "mithril"
-version = "0.5.2"
+version = "0.5.3"
 edition = "2021"
 description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
 license = "MIT"
