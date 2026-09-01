@@ -21,28 +21,18 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact: mithril-macos-arm64
-            use_cross: false
-            rustflags: ""
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact: mithril-macos-x64
-            use_cross: false
-            rustflags: ""
           - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
             artifact: mithril-linux-x64
-            use_cross: true
-            rustflags: "-C target-feature=+crt-static -C link-arg=-static-libstdc++ -C link-arg=-static-libgcc"
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             artifact: mithril-linux-arm64
-            use_cross: true
-            rustflags: ""
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: mithril-windows-x64
-            use_cross: false
-            rustflags: ""
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -51,22 +41,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install deps (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake musl-tools musl-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev clang
       - name: Install deps (Windows)
         if: runner.os == 'Windows'
         run: choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
-      - name: Install cross
-        if: matrix.use_cross
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cross
-      - name: Build with cross (Linux)
-        if: matrix.use_cross
-        run: cross build --release --target ${{ matrix.target }}
-        env:
-          RUSTFLAGS: ${{ matrix.rustflags }}
-      - name: Build with cargo (macOS / Windows)
-        if: "!matrix.use_cross"
+      - name: Build with cargo
         run: cargo build --release --target ${{ matrix.target }}
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
@@ -101,7 +80,7 @@ jobs:
           target: x86_64
           args: --release --out dist
           sccache: 'true'
-          manylinux: '2_28'
+          manylinux: 'auto'
           before-script-linux: "yum install -y clang-devel || dnf install -y clang-devel || (apt-get update && apt-get install -y libclang-dev)"
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -123,7 +102,7 @@ jobs:
           target: aarch64
           args: --release --out dist
           sccache: 'true'
-          manylinux: '2_28'
+          manylinux: 'auto'
           before-script-linux: "yum install -y clang-devel || dnf install -y clang-devel || (apt-get update && apt-get install -y libclang-dev)"
       - name: Upload wheels
         uses: actions/upload-artifact@v4
