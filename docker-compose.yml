@@ -1,8 +1,5 @@
 # Mithril — Docker Compose deployment
-# Usage:
-#   docker compose up -d
-#   docker exec -it mithril bash   (to configure Kiro CLI login)
-#   Then point Junie/OpenCode to http://localhost:16180
+# Fellowship: local qwen-14b worker + Gemini reviewer + Gemini specialist
 
 services:
   mithril:
@@ -16,11 +13,13 @@ services:
       - MITHRIL_KEY_ANTHROPIC=${MITHRIL_KEY_ANTHROPIC:-}
       - MITHRIL_KEY_GROQ=${MITHRIL_KEY_GROQ:-}
     volumes:
-      # Fellowship config (persists across restarts)
+      # Fellowship config
       - ./.mithril:/root/.mithril
-      # Kiro CLI credentials (persists login across restarts)
+      # GGUF models (mount from host — avoids 9GB copy into container)
+      - ~/.mithril/models:/root/.mithril/models:ro
+      # Kiro credentials (if needed)
       - ./.kiro-data:/root/.kiro
-      # Mount project for file tools (optional)
+      # Project workspace
       - ./:/workspace
     working_dir: /workspace
     restart: unless-stopped

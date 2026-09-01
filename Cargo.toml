@@ -1,6 +1,6 @@
 [package]
 name = "mithril"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
 license = "MIT"
@@ -27,7 +27,7 @@ tower = { version = "0.4", features = ["limit"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls-native-roots"] }
 anyhow = "1"
 thiserror = "1"
 parking_lot = "0.12"
@@ -60,7 +60,7 @@ subtle = "2"
 zeroize = { version = "1", features = ["derive"] }
 
 # Telegram bot
-teloxide = { version = "0.13", features = ["macros"] }
+teloxide = { version = "0.13", default-features = false, features = ["macros", "rustls", "ctrlc_handler"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 # Global singletons

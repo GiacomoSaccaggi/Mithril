@@ -1,32 +1,32 @@
-name: "kiro-gemini"
-description: "Kiro worker + Gemini planner/reviewer"
+name: "mithril"
+description: "Local 14B worker + Gemini reviewer + Gemini specialist"
 
 controller:
-  provider: gemini
-  model: gemini-2.5-flash
+  provider: local
+  model: qwen-1.5b
   context_window: 2
 
 agents:
-  - name: planner
-    provider: gemini
-    model: gemini-2.5-flash
-    role: "Plans tasks and breaks them into steps"
-    when: "planning, task breakdown, architecture decisions"
-    can_call: [worker]
-    tools: []
-
   - name: worker
-    provider: kiro
-    model: claude-sonnet-4.6
-    role: "Implements code changes and features"
-    when: "coding tasks, implementations, bug fixes"
+    provider: local
+    model: qwen-14b
+    role: "Primary coder — implements features and fixes bugs using local 14B model"
+    when: "coding tasks, implementations, bug fixes, file edits"
     can_call: [reviewer]
     tools: ["*"]
 
   - name: reviewer
     provider: gemini
     model: gemini-2.5-flash
-    role: "Reviews code for bugs and quality"
-    when: "code review, quality checks"
+    role: "Code reviewer — catches bugs, checks quality"
+    when: "code review, quality checks, architecture feedback"
     can_call: []
     tools: ["read_psi", "grep_files", "git_diff"]
+
+  - name: specialist
+    provider: gemini
+    model: gemini-2.5-flash
+    role: "Research specialist — web search, documentation, complex analysis"
+    when: "research, documentation lookup, complex architecture decisions, planning"
+    can_call: [worker]
+    tools: ["*"]

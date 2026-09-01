@@ -5,6 +5,7 @@
 **A multi-model orchestration engine.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
 
 [![Build](https://img.shields.io/badge/build-cargo-orange)](https://doc.rust-lang.org/cargo/)
+[![PyPI version](https://img.shields.io/pypi/v/mithril-ai.svg)](https://pypi.org/project/mithril-ai/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![API](https://img.shields.io/badge/API-Ollama%20%7C%20OpenAI%20%7C%20MCP-green)]()
 
@@ -58,7 +59,8 @@ curl http://localhost:16180/api/tags
 | **Backend for Junie** | Point Junie at `http://localhost:16180`, select your fellowship as the model |
 | **Backend for OpenCode** | Same — Ollama API compatible |
 | **Backend for Open WebUI** | Add as Ollama connection |
-| **Backend for LangChain** | Use OpenAI API at `http://localhost:16180/v1/chat/completions` |
+| **Backend for LangChain / LlamaIndex** | Use OpenAI API at `http://localhost:16180/v1/chat/completions` |
+| **Backend for Jupyter / Python** | `pip install mithril-ai` — run directly in notebooks and data workflows |
 | **MCP server for Claude Desktop** | `mithril mcp-stdio` |
 | **Standalone CLI** | `mithril chat` — built-in terminal interface |
 | **Docker service for teams** | `docker compose up` — shared orchestration backend |
@@ -129,23 +131,46 @@ graph TB
 
 ## Installation
 
-### One-liner
+### One-liner (Linux & macOS)
+Downloads the universal zero-dependency static binary and automatically configures your shell `PATH`:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/install.sh | bash
 ```
 
-### Manual
+### Python / Jupyter / Conda (`pip`)
+Ideal for Jupyter notebooks, Google Colab, SageMaker, cloud VMs, and Python data science stacks:
 ```bash
-# macOS (Apple Silicon)
-curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-macos-arm64.tar.gz | tar xz
-sudo mv mithril /usr/local/bin/
-
-# Linux (x86_64)
-curl -L https://github.com/GiacomoSaccaggi/mithril/releases/latest/download/mithril-linux-x64.tar.gz | tar xz
-sudo mv mithril /usr/local/bin/
+pip install mithril-ai
+```
+Inside a Jupyter notebook cell:
+```python
+!pip install mithril-ai
+!mithril --version
 ```
 
+### Homebrew (macOS & Linux)
+```bash
+brew install GiacomoSaccaggi/tap/mithril
+# or:
+brew tap giacomosaccaggi/tap && brew install mithril
+```
+
+### Standalone Pre-built Binaries
+Download the standalone binary for your architecture from [GitHub Releases](https://github.com/GiacomoSaccaggi/mithril/releases/latest):
+
+| Platform | Architecture | Archive |
+|---|---|---|
+| **Linux (Universal Static MUSL)** | x86_64 / amd64 | `mithril-linux-x64.tar.gz` |
+| **Linux (Universal Static MUSL)** | ARM64 / aarch64 | `mithril-linux-arm64.tar.gz` |
+| **macOS** | Apple Silicon (arm64) | `mithril-macos-arm64.tar.gz` |
+| **macOS** | Intel (x64) | `mithril-macos-x64.tar.gz` |
+| **Windows** | x86_64 | `mithril-windows-x64.zip` |
+
 ### Docker
+```bash
+docker run -d -p 16180:16180 ghcr.io/giacomosaccaggi/mithril:latest
+```
+Or via Docker Compose:
 ```bash
 git clone https://github.com/GiacomoSaccaggi/mithril.git
 cd mithril
