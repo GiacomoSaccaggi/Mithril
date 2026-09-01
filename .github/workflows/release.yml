@@ -86,7 +86,8 @@ jobs:
           target: x86_64
           args: --release --out dist
           sccache: 'true'
-          manylinux: 'off'
+          manylinux: 'auto'
+          container: off
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -113,7 +114,8 @@ jobs:
           target: aarch64
           args: --release --out dist
           sccache: 'true'
-          manylinux: 'off'
+          manylinux: 'auto'
+          container: off
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -253,6 +255,7 @@ jobs:
     name: Update Homebrew Formula
     needs: create-release
     runs-on: ubuntu-latest
+    continue-on-error: true
     if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'GiacomoSaccaggi/Mithril'
     steps:
       - name: Extract version
