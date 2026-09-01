@@ -1,0 +1,22 @@
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:edge"
+
+[target.aarch64-unknown-linux-musl.env]
+passthrough = [
+    "CFLAGS",
+    "CXXFLAGS",
+    "CMAKE_C_FLAGS",
+    "CMAKE_CXX_FLAGS",
+    "GGML_CPU_ARM",
+    "RUSTFLAGS",
+]
+
+[target.x86_64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-musl:edge"
+
+[target.x86_64-unknown-linux-musl.env]
+passthrough = [
+    "CFLAGS",
+    "CXXFLAGS",
+    "RUSTFLAGS",
+]

@@ -8,7 +8,12 @@ import sys
 import subprocess
 import shutil
 
-__version__ = "0.4.0"
+try:
+    from importlib.metadata import version
+    __version__ = version("mithril-ai")
+except Exception:
+    __version__ = "0.5.1"
+
 __all__ = ["main", "find_mithril_binary", "__version__"]
 
 def find_mithril_binary() -> str:

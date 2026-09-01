@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "mithril-ai"
-version = "0.5.0"
+version = "0.5.1"
 description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
 readme = "README.md"
 license = { text = "MIT" }
