@@ -3,7 +3,7 @@ requires = ["maturin>=1.4,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "mithril-ai"
+name = "mithril-cli"
 version = "0.5.4"
 description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
 readme = "README.md"

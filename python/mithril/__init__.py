@@ -10,7 +10,7 @@ import shutil
 
 try:
     from importlib.metadata import version
-    __version__ = version("mithril-ai")
+    __version__ = version("mithril-cli")
 except Exception:
     __version__ = "0.5.4"
 

@@ -235,6 +235,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          pattern: mithril-*
           path: artifacts
       - name: Create GitHub Release
         id: create_release

@@ -5,7 +5,7 @@
 **A multi-model orchestration engine.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
 
 [![Build](https://img.shields.io/badge/build-cargo-orange)](https://doc.rust-lang.org/cargo/)
-[![PyPI version](https://img.shields.io/pypi/v/mithril-ai.svg)](https://pypi.org/project/mithril-ai/)
+[![PyPI version](https://img.shields.io/pypi/v/mithril-cli.svg)](https://pypi.org/project/mithril-cli/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![API](https://img.shields.io/badge/API-Ollama%20%7C%20OpenAI%20%7C%20MCP-green)]()
 
@@ -60,7 +60,7 @@ curl http://localhost:16180/api/tags
 | **Backend for OpenCode** | Same — Ollama API compatible |
 | **Backend for Open WebUI** | Add as Ollama connection |
 | **Backend for LangChain / LlamaIndex** | Use OpenAI API at `http://localhost:16180/v1/chat/completions` |
-| **Backend for Jupyter / Python** | `pip install mithril-ai` — run directly in notebooks and data workflows |
+| **Backend for Jupyter / Python** | `pip install mithril-cli` — run directly in notebooks and data workflows |
 | **MCP server for Claude Desktop** | `mithril mcp-stdio` |
 | **Standalone CLI** | `mithril chat` — built-in terminal interface |
 | **Docker service for teams** | `docker compose up` — shared orchestration backend |
@@ -140,11 +140,11 @@ curl -fsSL https://raw.githubusercontent.com/GiacomoSaccaggi/mithril/main/instal
 ### Python / Jupyter / Conda (`pip`)
 Ideal for Jupyter notebooks, Google Colab, SageMaker, cloud VMs, and Python data science stacks:
 ```bash
-pip install mithril-ai
+pip install mithril-cli
 ```
 Inside a Jupyter notebook cell:
 ```python
-!pip install mithril-ai
+!pip install mithril-cli
 !mithril --version
 ```
 
