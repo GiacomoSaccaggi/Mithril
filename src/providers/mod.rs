@@ -25,6 +25,7 @@ mod local;
 pub mod kiro;
 pub mod copilot;
 pub mod junie;
+pub mod glean;
 mod gemini;
 mod openai;
 mod anthropic;
@@ -168,6 +169,12 @@ pub trait ChatProvider: Send + Sync {
 
     /// Check if provider is available (has credentials, model exists, etc.)
     async fn is_available(&self) -> bool;
+
+    /// Generate embeddings for a list of texts.
+    /// Returns a vector of embedding vectors (one per input text).
+    async fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        anyhow::bail!("Embeddings not supported by {} provider", self.name())
+    }
 }
 
 /// Create provider from name (uses model from global config).
@@ -238,13 +245,22 @@ pub fn create_provider_with_model(
                 api_key, model, config.providers.groq.base_url.clone(),
             )))
         }
-        _ => anyhow::bail!("Unknown provider: {}. Available: local, gemini, openai, anthropic, groq", name),
+        "glean" => {
+            let cookies = config
+                .get_credential("glean")?
+                .ok_or_else(|| anyhow::anyhow!("Glean session not configured. Run: mithril config login glean"))?;
+            let instance = glean::resolve_instance()
+                .ok_or_else(|| anyhow::anyhow!("Glean instance not configured. Set MITHRIL_GLEAN_INSTANCE env var or install Glean desktop app"))?;
+            let _model = model_override.unwrap_or("default");
+            Ok(Box::new(glean::GleanProvider::new(&instance, &cookies)))
+        }
+        _ => anyhow::bail!("Unknown provider: {}. Available: local, gemini, openai, anthropic, groq, glean", name),
     }
 }
 
 /// List all available providers
 pub fn available_providers() -> Vec<&'static str> {
-    vec!["local", "gemini", "openai", "anthropic", "groq"]
+    vec!["local", "gemini", "openai", "anthropic", "groq", "glean"]
 }
 
 
@@ -333,7 +349,8 @@ mod tests {
         assert!(providers.contains(&"openai"));
         assert!(providers.contains(&"anthropic"));
         assert!(providers.contains(&"groq"));
-        assert_eq!(providers.len(), 5);
+        assert!(providers.contains(&"glean"));
+        assert_eq!(providers.len(), 6);
     }
 
     #[test]

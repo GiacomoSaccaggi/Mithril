@@ -68,6 +68,18 @@ pub fn create_default_registry(base_path: &str) -> ToolRegistry {
     registry.register(GlobTool::new(base_path));
     registry.register(TodoWriteTool::new());
     registry.register(QuestionTool::new());
+
+    // Glean enterprise search (only if credentials are configured)
+    {
+        if let Ok(config) = crate::config::MithrilConfig::load() {
+            if let Ok(Some(cookies)) = config.get_credential("glean") {
+                if let Some(instance) = crate::providers::glean::resolve_instance() {
+                    registry.register(implementations::GleanSearchTool::new(instance, cookies));
+                }
+            }
+        }
+    }
+
     registry
 }
 

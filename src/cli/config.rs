@@ -60,6 +60,10 @@ pub async fn run(action: &str, key: Option<&str>, value: Option<&str>) -> Result
                     config.set_credential(key, value)?;
                     println!("✅ {} API key saved (encrypted)", key.green());
                 }
+                "glean" => {
+                    config.set_credential(key, value)?;
+                    println!("✅ {} session cookies saved (encrypted)", key.green());
+                }
                 "gemini-model" => {
                     config.providers.gemini.model = value.to_string();
                     config.save()?;
@@ -84,6 +88,18 @@ pub async fn run(action: &str, key: Option<&str>, value: Option<&str>) -> Result
                     // Treat as generic credential
                     config.set_credential(key, value)?;
                     println!("✅ Credential '{}' saved (encrypted)", key.green());
+                }
+            }
+        }
+
+        "login" => {
+            let key = key.ok_or_else(|| anyhow::anyhow!("Missing provider. Usage: mithril config login glean"))?;
+            match key {
+                "glean" => {
+                    login_glean(&mut config).await?;
+                }
+                _ => {
+                    anyhow::bail!("Login not supported for provider: {}. Only 'glean' supports browser login.", key);
                 }
             }
         }
@@ -163,14 +179,16 @@ fn print_config_help() {
     println!("  mithril config set <key> <value>       Set a configuration value");
     println!("  mithril config unset <key>             Remove a configuration value");
     println!("  mithril config get <key>               Get a configuration value");
+    println!("  mithril config login <provider>        Browser login (glean)");
     println!("  mithril config path                    Show config file path");
     println!();
     println!("{}", "Keys:".bold());
-    println!("  {}            Default provider (local, gemini, openai, anthropic)", "provider".cyan());
+    println!("  {}            Default provider (local, gemini, openai, anthropic, glean)", "provider".cyan());
     println!("  {}               Default local model", "model".cyan());
     println!("  {}              Gemini API key", "gemini".cyan());
     println!("  {}              OpenAI API key", "openai".cyan());
     println!("  {}           Anthropic API key", "anthropic".cyan());
+    println!("  {}              Glean session cookies", "glean".cyan());
     println!("  {}        Model for Gemini provider", "gemini-model".cyan());
     println!("  {}        Model for OpenAI provider", "openai-model".cyan());
     println!("  {}     Custom OpenAI-compatible URL", "openai-base-url".cyan());
@@ -180,4 +198,85 @@ fn print_config_help() {
     println!("  mithril config set gemini AIza...");
     println!("  mithril config set provider gemini");
     println!("  mithril config set openai-model gpt-4o");
+    println!("  mithril config login glean");
+}
+
+async fn login_glean(config: &mut MithrilConfig) -> Result<()> {
+    // Auto-detect instance
+    let instance = crate::providers::glean::resolve_instance()
+        .ok_or_else(|| anyhow::anyhow!("Glean instance not configured. Set MITHRIL_GLEAN_INSTANCE env var or install Glean desktop app"))?;
+
+    println!("{}", "🔐 Glean Login".bold());
+    println!();
+    println!("Instance: {}", instance.cyan());
+    println!();
+
+    // Open browser
+    let app_url = "https://app.glean.com";
+    println!("Opening {} in your browser...", app_url.cyan());
+    let _ = open_browser(app_url);
+
+    println!();
+    println!("{}", "After logging in, extract the cookies:".bold());
+    println!("  1. Open DevTools (F12) → Application tab → Cookies");
+    println!("  2. Find cookies for your Glean domain");
+    println!("  3. Copy the values of:");
+    println!("     • {}", "glean-session-store".yellow());
+    println!("     • {}", "okta-saml-hosted-login-session-store".yellow());
+    println!("  4. Paste them below in this format:");
+    println!("     {}", "glean-session-store=<value>; okta-saml-hosted-login-session-store=<value>".dimmed());
+    println!();
+
+    // Read cookie string
+    print!("{} ", "Paste cookies:".bold());
+    use std::io::Write;
+    std::io::stdout().flush()?;
+
+    let mut cookie_str = String::new();
+    std::io::stdin().read_line(&mut cookie_str)?;
+    let cookie_str = cookie_str.trim().to_string();
+
+    if cookie_str.is_empty() {
+        anyhow::bail!("No cookies provided");
+    }
+
+    // Validate
+    println!("Validating session...");
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{}/api/v1/listchats", instance))
+        .header("Content-Type", "application/json")
+        .header("Origin", "https://app.glean.com")
+        .header("Cookie", &cookie_str)
+        .body("{}")
+        .send()
+        .await?;
+
+    if !resp.status().is_success() {
+        anyhow::bail!(
+            "Cookie validation failed (HTTP {}). Please check your cookies and try again.",
+            resp.status()
+        );
+    }
+
+    // Save
+    config.set_credential("glean", &cookie_str)?;
+    println!();
+    println!(
+        "✅ Glean session saved! You can now use {} as a provider.",
+        "glean".green()
+    );
+
+    Ok(())
+}
+
+fn open_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", "start", url])
+        .spawn();
 }
