@@ -41,6 +41,10 @@ pub async fn run(action: &str, key: Option<&str>, value: Option<&str>) -> Result
             }
             println!("  Anthropic: model = {}", config.providers.anthropic.model.cyan());
             println!("  Groq:      model = {}", config.providers.groq.model.cyan());
+            println!();
+            println!("{}", "Security".bold().blue());
+            println!("  Input redaction (regex): {}", if config.redact_input { "enabled".green() } else { "disabled".yellow() });
+            println!("  LLM credential check:   {}", if config.redact_llm { "enabled".green() } else { "disabled".yellow() });
         }
 
         "set" => {
@@ -83,6 +87,18 @@ pub async fn run(action: &str, key: Option<&str>, value: Option<&str>) -> Result
                     config.providers.anthropic.model = value.to_string();
                     config.save()?;
                     println!("✅ Anthropic model set to: {}", value.green());
+                }
+                "redact_input" | "redact-input" => {
+                    let val = value.eq_ignore_ascii_case("true") || value == "1";
+                    config.redact_input = val;
+                    config.save()?;
+                    println!("✅ Input redaction: {}", if val { "enabled".green() } else { "disabled".yellow() });
+                }
+                "redact_llm" | "redact-llm" => {
+                    let val = value.eq_ignore_ascii_case("true") || value == "1";
+                    config.redact_llm = val;
+                    config.save()?;
+                    println!("✅ LLM credential detection: {}", if val { "enabled".green() } else { "disabled".yellow() });
                 }
                 _ => {
                     // Treat as generic credential
@@ -146,6 +162,12 @@ pub async fn run(action: &str, key: Option<&str>, value: Option<&str>) -> Result
                 }
                 "anthropic-model" => {
                     println!("{}", config.providers.anthropic.model);
+                }
+                "redact_input" | "redact-input" => {
+                    println!("{}", config.redact_input);
+                }
+                "redact_llm" | "redact-llm" => {
+                    println!("{}", config.redact_llm);
                 }
                 _ => {
                     // Check credentials (won't print value for security)

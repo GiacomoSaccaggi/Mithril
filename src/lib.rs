@@ -6,6 +6,7 @@ pub mod index;
 pub mod cli;
 pub mod config;
 pub mod providers;
+pub mod redact;
 pub mod session;
 pub mod flow;
 pub mod tui;

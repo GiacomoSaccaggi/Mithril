@@ -56,6 +56,12 @@ pub struct MithrilConfig {
     /// Stored in ~/.mithril/secrets (NOT in config.yaml) with 0600 permissions.
     #[serde(skip)]
     pub api_token: Option<String>,
+    /// Redact credentials/secrets from input before sending to cloud providers (default: true)
+    #[serde(default = "default_true")]
+    pub redact_input: bool,
+    /// Use LLM to detect secrets that regex misses (default: false)
+    #[serde(default)]
+    pub redact_llm: bool,
     /// Optional user-provided secret to strengthen credential encryption.
     /// Stored in ~/.mithril/secrets (NOT in config.yaml) with 0600 permissions.
     #[serde(skip)]
@@ -75,6 +81,8 @@ impl Default for MithrilConfig {
             telegram_allowed_users: Vec::new(),
             key_password: None,
             api_token: None,
+            redact_input: true,
+            redact_llm: false,
         }
     }
 }

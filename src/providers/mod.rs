@@ -26,6 +26,7 @@ pub mod kiro;
 pub mod copilot;
 pub mod junie;
 pub mod glean;
+pub mod redacting;
 mod gemini;
 mod openai;
 mod anthropic;
@@ -193,57 +194,57 @@ pub fn create_provider_with_model(
     model_override: Option<&str>,
     config: &crate::config::MithrilConfig,
 ) -> Result<Box<dyn ChatProvider>> {
-    match name {
+    let provider: Box<dyn ChatProvider> = match name {
         "junie" => {
             // JetBrains Junie CLI — no API key needed (uses JetBrains auth)
             let model = model_override.unwrap_or("auto");
-            Ok(Box::new(junie::JunieProvider::new(model)))
+            Box::new(junie::JunieProvider::new(model))
         }
         "copilot" => {
             // GitHub Copilot CLI — no API key needed (uses gh auth)
             let model = model_override.unwrap_or("gpt-4o");
-            Ok(Box::new(copilot::CopilotProvider::new(model)))
+            Box::new(copilot::CopilotProvider::new(model))
         }
         "kiro" => {
             // Kiro CLI provider — no API key needed (uses kiro-cli auth)
             let model = model_override.unwrap_or("claude-sonnet-4");
-            Ok(Box::new(kiro::KiroProvider::new(model)))
+            Box::new(kiro::KiroProvider::new(model))
         }
         "local" => {
             let model = model_override.unwrap_or(&config.default_model);
-            Ok(Box::new(LocalProvider::new(model)?))
+            Box::new(LocalProvider::new(model)?)
         }
         "gemini" => {
             let api_key = config
                 .get_credential("gemini")?
                 .ok_or_else(|| anyhow::anyhow!("Gemini API key not configured. Run: mithril config set gemini <your-api-key>"))?;
             let model = model_override.unwrap_or(&config.providers.gemini.model);
-            Ok(Box::new(GeminiProvider::new(api_key, model)))
+            Box::new(GeminiProvider::new(api_key, model))
         }
         "openai" => {
             let api_key = config
                 .get_credential("openai")?
                 .ok_or_else(|| anyhow::anyhow!("OpenAI API key not configured. Run: mithril config set openai <your-api-key>"))?;
             let model = model_override.unwrap_or(&config.providers.openai.model);
-            Ok(Box::new(OpenAIProvider::new(
+            Box::new(OpenAIProvider::new(
                 api_key, model, config.providers.openai.base_url.clone(),
-            )))
+            ))
         }
         "anthropic" => {
             let api_key = config
                 .get_credential("anthropic")?
                 .ok_or_else(|| anyhow::anyhow!("Anthropic API key not configured. Run: mithril config set anthropic <your-api-key>"))?;
             let model = model_override.unwrap_or(&config.providers.anthropic.model);
-            Ok(Box::new(AnthropicProvider::new(api_key, model)))
+            Box::new(AnthropicProvider::new(api_key, model))
         }
         "groq" => {
             let api_key = config
                 .get_credential("groq")?
                 .ok_or_else(|| anyhow::anyhow!("Groq API key not configured. Run: mithril config set groq <your-api-key>"))?;
             let model = model_override.unwrap_or(&config.providers.groq.model);
-            Ok(Box::new(GroqProvider::new(
+            Box::new(GroqProvider::new(
                 api_key, model, config.providers.groq.base_url.clone(),
-            )))
+            ))
         }
         "glean" => {
             let cookies = config
@@ -252,9 +253,35 @@ pub fn create_provider_with_model(
             let instance = glean::resolve_instance()
                 .ok_or_else(|| anyhow::anyhow!("Glean instance not configured. Set MITHRIL_GLEAN_INSTANCE env var or install Glean desktop app"))?;
             let _model = model_override.unwrap_or("default");
-            Ok(Box::new(glean::GleanProvider::new(&instance, &cookies)))
+            Box::new(glean::GleanProvider::new(&instance, &cookies))
         }
         _ => anyhow::bail!("Unknown provider: {}. Available: local, gemini, openai, anthropic, groq, glean", name),
+    };
+
+    // Wrap cloud providers with input redaction (unless disabled)
+    let should_redact = config.redact_input
+        && std::env::var("MITHRIL_REDACT_INPUT").ok().map(|v| v != "false" && v != "0").unwrap_or(true);
+    let is_local = matches!(name, "local" | "kiro" | "junie" | "copilot");
+
+    if should_redact && !is_local {
+        let should_redact_llm = config.redact_llm
+            && std::env::var("MITHRIL_REDACT_LLM").ok().map(|v| v != "false" && v != "0").unwrap_or(true);
+
+        let llm_checker: Option<std::sync::Arc<dyn ChatProvider>> = if should_redact_llm {
+            match LocalProvider::new(&config.default_model) {
+                Ok(p) => Some(std::sync::Arc::new(p) as std::sync::Arc<dyn ChatProvider>),
+                Err(e) => {
+                    tracing::warn!("Failed to create LLM redaction checker: {}. Falling back to regex-only.", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        Ok(redacting::RedactingProvider::new(provider, llm_checker))
+    } else {
+        Ok(provider)
     }
 }
 

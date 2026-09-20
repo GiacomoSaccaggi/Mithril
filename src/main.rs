@@ -10,6 +10,7 @@ mod api;
 mod index;
 mod config;
 mod providers;
+mod redact;
 mod session;
 mod flow;
 mod tui;
