@@ -7,6 +7,7 @@ pub mod scan_tools;
 pub mod git_tools;
 pub mod lore_tools;
 pub mod utility_tools;
+pub mod glean_tools;
 
 pub use file_tools::*;
 pub use terminal_tools::*;
@@ -15,6 +16,7 @@ pub use scan_tools::*;
 pub use git_tools::*;
 pub use lore_tools::*;
 pub use utility_tools::*;
+pub use glean_tools::*;
 
 #[cfg(test)]
 mod tool_execution_tests {

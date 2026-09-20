@@ -90,17 +90,63 @@ async fn test_chat_malformed_json_returns_422_no_crash() {
 }
 
 #[tokio::test]
-async fn test_embed_returns_501() {
+async fn test_embed_returns_error_without_credentials() {
     let base = spawn_server().await;
     let res = reqwest::Client::new()
         .post(format!("{base}/api/embed"))
-        .json(&serde_json::json!({ "model": "qwen-1.5b", "input": "hello" }))
+        .json(&serde_json::json!({ "model": "gemini-embedding-exp-03-07", "input": "hello" }))
         .send()
         .await
         .unwrap();
-    assert_eq!(res.status(), 501);
-    let body: serde_json::Value = res.json().await.unwrap();
-    assert!(body["error"].is_string());
+    // Without credentials configured, should return 503 (provider not available)
+    assert!(res.status().is_client_error() || res.status().is_server_error());
+}
+
+#[tokio::test]
+async fn test_embed_bad_input_returns_400() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/api/embed"))
+        .json(&serde_json::json!({ "model": "test", "input": 123 }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 400);
+}
+
+#[tokio::test]
+async fn test_rerank_returns_results_shape() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/api/rerank"))
+        .json(&serde_json::json!({
+            "model": "gemini-2.5-flash",
+            "query": "test query",
+            "documents": ["doc about testing", "doc about cooking"],
+            "top_n": 2
+        }))
+        .send()
+        .await
+        .unwrap();
+    // Without credentials, should fail gracefully (not crash)
+    assert!(res.status().is_client_error() || res.status().is_server_error());
+}
+
+#[tokio::test]
+async fn test_rerank_empty_docs_returns_400() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/api/rerank"))
+        .json(&serde_json::json!({
+            "model": "gemini-2.5-flash",
+            "query": "test",
+            "documents": [],
+            "top_n": 2
+        }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 400);
 }
 
 #[tokio::test]

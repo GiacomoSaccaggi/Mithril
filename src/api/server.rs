@@ -103,6 +103,7 @@ impl MithrilServer {
             .route("/api/chat", post(super::ollama::chat))
             .route("/api/pull", post(super::ollama::pull_model))
             .route("/api/embed", post(super::ollama::embed))
+            .route("/api/rerank", post(super::ollama::rerank))
             .route("/v1/chat/completions", post(super::openai::chat_completions))
             .route("/mcp", post(super::mcp::handle_mcp))
             .layer(ConcurrencyLimitLayer::new(10));
@@ -157,6 +158,7 @@ pub fn build_app(state: AppState) -> axum::Router {
         .route("/api/chat", axum::routing::post(super::ollama::chat))
         .route("/api/pull", axum::routing::post(super::ollama::pull_model))
         .route("/api/embed", axum::routing::post(super::ollama::embed))
+        .route("/api/rerank", axum::routing::post(super::ollama::rerank))
         .route("/v1/chat/completions", axum::routing::post(super::openai::chat_completions))
         .route("/mcp", axum::routing::post(super::mcp::handle_mcp))
         .layer(ConcurrencyLimitLayer::new(10));

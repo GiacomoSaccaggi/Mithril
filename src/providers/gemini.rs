@@ -195,6 +195,34 @@ impl ChatProvider for GeminiProvider {
         !self.api_key.is_empty()
     }
 
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        let mut embeddings = Vec::new();
+        for text in texts {
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-exp-03-07:embedContent?key={}",
+                self.api_key
+            );
+            let body = serde_json::json!({
+                "content": { "parts": [{ "text": text }] }
+            });
+            let response = self.client.post(&url).json(&body).send().await?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let err = response.text().await.unwrap_or_default();
+                anyhow::bail!("Gemini embed error ({}): {}", status, err);
+            }
+            let parsed: serde_json::Value = response.json().await?;
+            let values = parsed["embedding"]["values"]
+                .as_array()
+                .ok_or_else(|| anyhow::anyhow!("Invalid embedding response"))?
+                .iter()
+                .filter_map(|v| v.as_f64().map(|f| f as f32))
+                .collect();
+            embeddings.push(values);
+        }
+        Ok(embeddings)
+    }
+
     async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],

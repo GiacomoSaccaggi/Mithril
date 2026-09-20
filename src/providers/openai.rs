@@ -196,6 +196,38 @@ impl ChatProvider for OpenAIProvider {
         !self.api_key.is_empty()
     }
 
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        let url = format!("{}/embeddings", self.base_url);
+        let body = serde_json::json!({
+            "model": "text-embedding-3-small",
+            "input": texts
+        });
+        let response = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&body)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let err = response.text().await.unwrap_or_default();
+            anyhow::bail!("OpenAI embed error ({}): {}", status, err);
+        }
+        let parsed: serde_json::Value = response.json().await?;
+        let data = parsed["data"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid embedding response"))?;
+        let embeddings = data.iter().map(|item| {
+            item["embedding"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .filter_map(|v| v.as_f64().map(|f| f as f32))
+                .collect()
+        }).collect();
+        Ok(embeddings)
+    }
+
     async fn chat_with_tools(
         &self,
         messages: &[ChatMessage],

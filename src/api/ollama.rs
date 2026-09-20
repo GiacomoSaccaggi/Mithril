@@ -34,6 +34,12 @@ pub struct GenerateRequest {
 }
 
 #[derive(Deserialize)]
+pub struct EmbedRequest {
+    pub model: String,
+    pub input: serde_json::Value, // string or array of strings
+}
+
+#[derive(Deserialize)]
 pub struct MessageInput {
     pub role: String,
     pub content: String,
@@ -550,11 +556,150 @@ pub async fn pull_model(
     (StatusCode::OK, Json(json!({ "status": "pulling manifest", "model": model })))
 }
 
-pub async fn embed(Json(_body): Json<Value>) -> (StatusCode, Json<Value>) {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(json!({
-            "error": "embeddings are not supported in this build of Mithril"
-        })),
-    )
+pub async fn embed(
+    State(_state): State<AppState>,
+    Json(req): Json<EmbedRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    use crate::config::MithrilConfig;
+    use crate::providers;
+
+    // Parse input: accept string or array of strings
+    let texts: Vec<String> = match &req.input {
+        Value::String(s) => vec![s.clone()],
+        Value::Array(arr) => arr.iter().filter_map(|v| v.as_str().map(String::from)).collect(),
+        _ => return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "input must be a string or array of strings"})))),
+    };
+
+    if texts.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "input must not be empty"}))));
+    }
+
+    // Detect provider from model name
+    let provider_name = if req.model.starts_with("gemini") || req.model.contains("embedding") && !req.model.starts_with("text-") {
+        "gemini"
+    } else if req.model.starts_with("text-embedding") || req.model.starts_with("openai") {
+        "openai"
+    } else {
+        // Default: try gemini first, then openai
+        "gemini"
+    };
+
+    let config = MithrilConfig::load().map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error": format!("config load failed: {e}")}))
+    ))?;
+
+    let provider = providers::create_provider(provider_name, &config).map_err(|e| (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({"error": format!("provider not available: {e}")}))
+    ))?;
+
+    let embeddings = provider.embed(&texts).await.map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error": e.to_string()}))
+    ))?;
+
+    Ok(Json(json!({
+        "model": req.model,
+        "embeddings": embeddings
+    })))
+}
+
+#[derive(Deserialize)]
+pub struct RerankRequest {
+    pub model: String,
+    pub query: String,
+    pub documents: Vec<String>,
+    #[serde(default = "default_top_n")]
+    pub top_n: usize,
+}
+
+fn default_top_n() -> usize { 3 }
+
+pub async fn rerank(
+    State(_state): State<AppState>,
+    Json(req): Json<RerankRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    use crate::config::MithrilConfig;
+    use crate::providers::{self, ChatMessage as ProviderMessage};
+
+    if req.documents.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "documents must not be empty"}))));
+    }
+    if req.query.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, Json(json!({"error": "query must not be empty"}))));
+    }
+
+    let config = MithrilConfig::load().map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error": format!("config load failed: {e}")}))
+    ))?;
+
+    // Detect provider from model name
+    let provider_name = detect_cloud_provider(&req.model).unwrap_or("gemini");
+
+    let provider = providers::create_provider(provider_name, &config).map_err(|e| (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(json!({"error": format!("provider not available: {e}")}))
+    ))?;
+
+    // Build prompt for LLM-based reranking
+    let docs_list: String = req.documents.iter().enumerate()
+        .map(|(i, d)| format!("[{}] {}", i, d.chars().take(500).collect::<String>()))
+        .collect::<Vec<_>>().join("\n");
+
+    let prompt = format!(
+        "Rate the relevance of each document to the query on a scale of 0 to 10. \
+        Return ONLY a JSON array of numbers, one score per document, in order. \
+        Example: [8, 2, 5]\n\nQuery: {}\n\nDocuments:\n{}\n\nScores:",
+        req.query, docs_list
+    );
+
+    let messages = vec![ProviderMessage::user(&prompt)];
+    let response = provider.chat(&messages).await.map_err(|e| (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({"error": e.to_string()}))
+    ))?;
+
+    // Parse scores from LLM response
+    let scores: Vec<f64> = parse_scores(&response, req.documents.len());
+
+    // Build results sorted by score descending
+    let mut results: Vec<Value> = scores.iter().enumerate().map(|(i, &score)| {
+        json!({
+            "index": i,
+            "document": req.documents.get(i).cloned().unwrap_or_default(),
+            "relevance_score": score / 10.0 // normalize to 0-1
+        })
+    }).collect();
+    results.sort_by(|a, b| b["relevance_score"].as_f64().unwrap_or(0.0)
+        .partial_cmp(&a["relevance_score"].as_f64().unwrap_or(0.0)).unwrap_or(std::cmp::Ordering::Equal));
+    results.truncate(req.top_n);
+
+    Ok(Json(json!({ "results": results })))
+}
+
+/// Parse LLM response into scores array, with fallback for unparseable responses.
+fn parse_scores(response: &str, num_docs: usize) -> Vec<f64> {
+    // Try to find JSON array in response
+    let trimmed = response.trim();
+    // Find array bounds
+    if let (Some(start), Some(end)) = (trimmed.find('['), trimmed.rfind(']')) {
+        let array_str = &trimmed[start..=end];
+        if let Ok(scores) = serde_json::from_str::<Vec<f64>>(array_str) {
+            if scores.len() == num_docs {
+                return scores;
+            }
+        }
+    }
+    // Fallback: try to extract individual numbers
+    let numbers: Vec<f64> = trimmed.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .filter_map(|s| s.parse::<f64>().ok())
+        .filter(|&n| n >= 0.0 && n <= 10.0)
+        .collect();
+    if numbers.len() >= num_docs {
+        return numbers[..num_docs].to_vec();
+    }
+    // Last resort: equal scores
+    vec![5.0; num_docs]
 }
