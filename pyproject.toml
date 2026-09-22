@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "mithril-cli"
-version = "0.5.4"
-description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
+version = "1.0.0"
+description = "Multi-model orchestration backend. Fellowship-based agent routing with Ollama/OpenAI/MCP API compatibility."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Giacomo Saccaggi" }]

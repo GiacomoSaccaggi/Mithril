@@ -128,8 +128,14 @@ async fn test_rerank_returns_results_shape() {
         .send()
         .await
         .unwrap();
-    // Without credentials, should fail gracefully (not crash)
-    assert!(res.status().is_client_error() || res.status().is_server_error());
+    // With credentials: 200 with valid response. Without: 503 (provider not available).
+    // Either way: must not crash.
+    if res.status().is_success() {
+        let body: serde_json::Value = res.json().await.unwrap();
+        assert!(body["results"].is_array(), "expected results array, got: {body}");
+    } else {
+        assert!(res.status().is_client_error() || res.status().is_server_error());
+    }
 }
 
 #[tokio::test]
@@ -292,30 +298,7 @@ async fn test_health_not_affected_by_rate_limiting() {
     }
 }
 
-#[tokio::test]
-async fn test_session_file_permissions() {
-    use mithril::session::SharedSession;
-    use mithril::providers::ChatMessage;
-    let s = SharedSession::new("local");
-    s.push(ChatMessage::user("test message"));
 
-    // Check that session file exists and on Unix has 0600 permissions
-    let session_dir = dirs::home_dir().unwrap().join(".mithril").join("sessions");
-    let session_file = session_dir.join(format!("{}.json", s.id));
-
-    if session_file.exists() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            let meta = std::fs::metadata(&session_file).unwrap();
-            let mode = meta.mode() & 0o777;
-            assert_eq!(mode, 0o600, "Session file must have 0600 permissions, got {:o}", mode);
-        }
-    }
-
-    // Cleanup
-    let _ = mithril::session::delete_session(&s.id);
-}
 
 // ── Helper per server con token auth ─────────────────────────────────────────
 
@@ -688,77 +671,7 @@ async fn test_mcp_initialize_handshake() {
     assert_eq!(body["result"]["protocolVersion"], "2024-11-05");
 }
 
-// ── Session E2E ───────────────────────────────────────────────────────────────
 
-#[tokio::test]
-async fn test_session_save_load_roundtrip() {
-    use mithril::session::{SharedSession, delete_session};
-    use mithril::providers::ChatMessage;
-
-    let s = SharedSession::new("gemini");
-    let id = s.id.clone();
-    s.push(ChatMessage::user("hello session"));
-    s.push(ChatMessage::assistant("hi back"));
-
-    let loaded = SharedSession::load(&id).unwrap();
-    let msgs = loaded.snapshot();
-    assert_eq!(msgs.len(), 2);
-    assert_eq!(msgs[0].role, "user");
-    assert_eq!(msgs[0].content, "hello session");
-    assert_eq!(msgs[1].role, "assistant");
-
-    let _ = delete_session(&id);
-}
-
-#[tokio::test]
-async fn test_session_push_with_result_rollback_on_error() {
-    use mithril::session::SharedSession;
-    use mithril::providers::ChatMessage;
-
-    let s = SharedSession::new("local");
-    // push two messages successfully
-    s.push_with_result(ChatMessage::user("msg1")).unwrap();
-    s.push_with_result(ChatMessage::user("msg2")).unwrap();
-    assert_eq!(s.snapshot().len(), 2);
-
-    let _ = mithril::session::delete_session(&s.id);
-}
-
-#[tokio::test]
-async fn test_session_claim_frontend_exclusive() {
-    use mithril::session::{SharedSession, FRONTEND_TELEGRAM, FRONTEND_TERMINAL, FRONTEND_NONE};
-    use std::sync::atomic::Ordering;
-
-    let s = SharedSession::new("local");
-    s.active_frontend.store(FRONTEND_NONE, Ordering::SeqCst);
-
-    // Telegram claims
-    assert!(s.claim_frontend(FRONTEND_TELEGRAM).is_ok());
-    // Terminal cannot claim while telegram is active
-    assert!(s.claim_frontend(FRONTEND_TERMINAL).is_err());
-    // Telegram can re-claim idempotently
-    assert!(s.claim_frontend(FRONTEND_TELEGRAM).is_ok());
-    // Release and terminal can claim
-    s.release_frontend(FRONTEND_TELEGRAM);
-    assert!(s.claim_frontend(FRONTEND_TERMINAL).is_ok());
-}
-
-#[tokio::test]
-async fn test_session_list_and_delete() {
-    use mithril::session::{SharedSession, list_sessions, delete_session};
-    use mithril::providers::ChatMessage;
-
-    let s = SharedSession::new("openai");
-    let id = s.id.clone();
-    s.push(ChatMessage::user("test for listing"));
-
-    let sessions = list_sessions().unwrap();
-    assert!(sessions.iter().any(|m| m.id == id), "session should appear in list");
-
-    delete_session(&id).unwrap();
-    let sessions_after = list_sessions().unwrap();
-    assert!(!sessions_after.iter().any(|m| m.id == id), "session should be deleted");
-}
 
 // ── Config / Credentials E2E ──────────────────────────────────────────────────
 

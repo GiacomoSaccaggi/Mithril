@@ -2,12 +2,16 @@
 
 > *"Mithril! All folk desired it. It could be beaten like copper, and polished like glass; and the Dwarves could make of it a metal, light and yet harder than tempered steel."* — Gandalf
 
-**A multi-model orchestration engine.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
+**A multi-model orchestration backend.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
 
 [![Build](https://img.shields.io/badge/build-cargo-orange)](https://doc.rust-lang.org/cargo/)
 [![PyPI version](https://img.shields.io/pypi/v/mithril-cli.svg)](https://pypi.org/project/mithril-cli/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![API](https://img.shields.io/badge/API-Ollama%20%7C%20OpenAI%20%7C%20MCP-green)]()
+
+---
+
+> **Why backend-only?** During the beta versions (pre-1.0), Mithril included a built-in terminal REPL, a full-screen TUI, and a Telegram bot. After extensive use, it became clear that tools like [Junie](https://www.jetbrains.com/junie/) and [OpenCode](https://github.com/opencode-ai/opencode) are vastly superior as coding frontends — better UX, richer tool integration, and active development by dedicated teams. Starting with v1.0, Mithril focuses exclusively on what it does best: **fellowship orchestration and multi-provider routing**. You bring the frontend you love, Mithril is the engine behind it.
 
 ---
 
@@ -45,10 +49,11 @@ mithril serve
 Now any Ollama-compatible client sees your fellowship as a model:
 
 ```bash
-# From Junie, OpenCode, Open WebUI, or any Ollama client:
 curl http://localhost:16180/api/tags
 # → {"models": [{"name": "my-team:latest", "details": {"family": "mithril-fellowship"}}]}
 ```
+
+**That's it.** Point Junie, OpenCode, Open WebUI, LangChain, or any Ollama/OpenAI client at `http://localhost:16180` and select your fellowship.
 
 ---
 
@@ -62,9 +67,7 @@ curl http://localhost:16180/api/tags
 | **Backend for LangChain / LlamaIndex** | Use OpenAI API at `http://localhost:16180/v1/chat/completions` |
 | **Backend for Jupyter / Python** | `pip install mithril-cli` — run directly in notebooks and data workflows |
 | **MCP server for Claude Desktop** | `mithril mcp-stdio` |
-| **Standalone CLI** | `mithril chat` — built-in terminal interface |
 | **Docker service for teams** | `docker compose up` — shared orchestration backend |
-| **Telegram bot** | `mithril telegram` — chat via Telegram with same fellowship |
 
 ---
 
@@ -78,8 +81,6 @@ graph TB
         W[Open WebUI]
         L[LangChain]
         C[Claude Desktop]
-        T[Telegram]
-        CLI[Mithril CLI]
     end
 
     subgraph "Mithril Engine"
@@ -111,8 +112,6 @@ graph TB
     W -->|Ollama API| API
     L -->|OpenAI API| API
     C -->|MCP stdio| API
-    T -->|Internal| API
-    CLI -->|Internal| API
 
     API --> ORCH
     ORCH --> G
@@ -142,26 +141,19 @@ Ideal for Jupyter notebooks, Google Colab, SageMaker, cloud VMs, and Python data
 ```bash
 pip install mithril-cli
 ```
-Inside a Jupyter notebook cell:
-```python
-!pip install mithril-cli
-!mithril --version
-```
 
 ### Homebrew (macOS & Linux)
 ```bash
 brew install GiacomoSaccaggi/tap/mithril
-# or:
-brew tap giacomosaccaggi/tap && brew install mithril
 ```
 
 ### Standalone Pre-built Binaries
-Download the standalone binary for your architecture from [GitHub Releases](https://github.com/GiacomoSaccaggi/mithril/releases/latest):
+Download from [GitHub Releases](https://github.com/GiacomoSaccaggi/mithril/releases/latest):
 
 | Platform | Architecture | Archive |
 |---|---|---|
-| **Linux (Universal Static MUSL)** | x86_64 / amd64 | `mithril-linux-x64.tar.gz` |
-| **Linux (Universal Static MUSL)** | ARM64 / aarch64 | `mithril-linux-arm64.tar.gz` |
+| **Linux** | x86_64 / amd64 | `mithril-linux-x64.tar.gz` |
+| **Linux** | ARM64 / aarch64 | `mithril-linux-arm64.tar.gz` |
 | **macOS** | Apple Silicon (arm64) | `mithril-macos-arm64.tar.gz` |
 | **macOS** | Intel (x64) | `mithril-macos-x64.tar.gz` |
 | **Windows** | x86_64 | `mithril-windows-x64.zip` |
@@ -175,7 +167,6 @@ Or via Docker Compose:
 git clone https://github.com/GiacomoSaccaggi/mithril.git
 cd mithril
 docker compose up -d
-# API available at http://localhost:16180
 ```
 
 ### Build from source
@@ -288,36 +279,6 @@ Agents communicate via the NEXT/TASK protocol:
 
 ---
 
-## The CLI (Optional)
-
-Mithril includes a full-featured terminal interface:
-
-```bash
-mithril chat              # Interactive REPL with Tab completion
-mithril chat --tui        # Full-screen TUI with panels
-mithril exec "fix bug"    # Non-interactive (for CI/scripts)
-```
-
-Features: `@file` expansion, `#agent` routing, `/commands`, Plan/Build modes, undo/redo, session persistence, custom commands, hooks.
-
-See [docs/CLI.md](docs/CLI.md) for details.
-
----
-
-## API Endpoints
-
-| Endpoint | Protocol | Use |
-|----------|----------|-----|
-| `GET /health` | — | Health check |
-| `GET /api/tags` | Ollama | List models (includes fellowships) |
-| `POST /api/chat` | Ollama | Chat completion |
-| `POST /api/generate` | Ollama | Text generation |
-| `POST /v1/chat/completions` | OpenAI | Chat completion |
-| `GET /v1/models` | OpenAI | List models |
-| `POST /mcp` | MCP | JSON-RPC tool calls |
-
----
-
 ## Provider Types
 
 Mithril supports three types of providers:
@@ -358,9 +319,25 @@ agents:
     model: qwen-14b
 ```
 
-CLI providers are useful when you have access to tools like Kiro, Junie, or GitHub Copilot with their own authentication and model access. Mithril orchestrates them as part of your fellowship without needing separate API keys. Each CLI tool has its own credit budget — use them strategically for complex tasks while Gemini handles the bulk.
+CLI providers are useful when you have access to tools like Kiro, Junie, or GitHub Copilot with their own authentication and model access. Mithril orchestrates them as part of your fellowship without needing separate API keys.
 
-> **Note on the controller:** The controller (classifier/router) defaults to a local GGUF model which is free, fast (~100ms), and private. You can technically use any provider as controller (e.g., `provider: gemini`), but it's not worth the cost unless you have a very large agent structure where precise routing justifies paying per-classification.
+> **Note on the controller:** The controller defaults to a local GGUF model which is free, fast (~100ms), and private. You can use any provider as controller, but it's not worth the cost unless precise routing justifies paying per-classification.
+
+---
+
+## API Endpoints
+
+| Endpoint | Protocol | Use |
+|----------|----------|-----|
+| `GET /health` | — | Health check |
+| `GET /api/tags` | Ollama | List models (includes fellowships) |
+| `POST /api/chat` | Ollama | Chat completion |
+| `POST /api/generate` | Ollama | Text generation |
+| `POST /api/embed` | Ollama | Embeddings |
+| `POST /api/rerank` | Ollama | Reranking |
+| `POST /v1/chat/completions` | OpenAI | Chat completion |
+| `GET /v1/models` | OpenAI | List models |
+| `POST /mcp` | MCP | JSON-RPC tool calls |
 
 ---
 
@@ -377,19 +354,28 @@ Interaction: `todo_write`, `question`
 
 ---
 
-## Documentation
+## Security
 
-| Document | Contents |
-|----------|----------|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and module map |
-| [docs/TOOLS.md](docs/TOOLS.md) | All 24 tools with parameters |
-| [docs/CLI.md](docs/CLI.md) | Terminal commands and features |
-| [docs/API.md](docs/API.md) | HTTP endpoints reference |
-| [docs/PROVIDERS.md](docs/PROVIDERS.md) | Provider configuration |
-| [docs/SECURITY.md](docs/SECURITY.md) | Security model |
-| [docs/SESSION.md](docs/SESSION.md) | Session persistence |
-| [docs/ENGINE.md](docs/ENGINE.md) | GGUF inference engine |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Join the Fellowship |
+- **Credential encryption**: API keys are encrypted at rest with Argon2id + AES-256-GCM
+- **Input redaction**: Credentials and secrets in prompts are automatically masked before being sent to cloud providers
+- **Terminal sandbox**: Blocks dangerous commands (`rm -rf /`, `sudo`, `curl | bash`, etc.)
+- **API token auth**: Optional bearer token for the HTTP server (`mithril config set api_token <token>`)
+- **No telemetry**: Zero data collection, zero phone-home
+
+---
+
+## CLI Commands
+
+| Command | Purpose |
+|---------|---------|
+| `mithril serve` | Start the HTTP server (Ollama + OpenAI + MCP) |
+| `mithril config` | Manage API keys and settings |
+| `mithril fellowship` | Create and manage fellowship configurations |
+| `mithril fellowships` | List all available fellowships |
+| `mithril download-model` | Download GGUF models for local inference |
+| `mithril scan` | Build the Palantír semantic index for the current directory |
+| `mithril mcp-stdio` | Start MCP server over stdio (for Claude Desktop) |
+| `mithril init` | Analyze codebase and generate project steering file |
 
 ---
 

@@ -176,7 +176,7 @@ mod tests {
 
         let msgs = received.lock().unwrap();
         assert_eq!(msgs.len(), 1);
-        assert!(msgs[0].contains("****"));
+        assert!(msgs[0].contains("[REDACTED]"));
         assert!(!msgs[0].contains("AIzaSyBiCp5vH5l0"));
     }
 

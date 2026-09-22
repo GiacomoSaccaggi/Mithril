@@ -1,8 +1,8 @@
 [package]
 name = "mithril"
-version = "0.5.4"
+version = "1.0.0"
 edition = "2021"
-description = "Multi-model orchestration engine. Combine LLM providers into a single Ollama-compatible API."
+description = "Multi-model orchestration backend. Fellowship-based agent routing with Ollama/OpenAI/MCP API compatibility."
 license = "MIT"
 repository = "https://github.com/GiacomoSaccaggi/Mithril"
 homepage = "https://giacomosaccaggi.github.io/Mithril/"
@@ -45,10 +45,7 @@ encoding_rs = "0.8"
 urlencoding = "2"
 pathdiff = "0.2"
 
-# CLI interactive
-rustyline = "14"
-crossterm = "0.28"
-ratatui = "0.29"
+# CLI output
 colored = "2"
 
 # Encryption for credentials
@@ -59,8 +56,6 @@ argon2 = "0.5"
 subtle = "2"
 zeroize = { version = "1", features = ["derive"] }
 
-# Telegram bot
-teloxide = { version = "0.13", default-features = false, features = ["macros", "rustls", "ctrlc_handler"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 # Global singletons

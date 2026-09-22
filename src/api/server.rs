@@ -173,7 +173,7 @@ pub fn build_app(state: AppState) -> axum::Router {
 async fn metrics(State(state): State<AppState>) -> String {
     let model_loaded = state.model_manager.is_loaded();
     format!(
-        "# HELP mithril_up Whether the service is up\n         # TYPE mithril_up gauge\n         mithril_up 1\n         # HELP mithril_model_loaded Whether a GGUF model is loaded in memory\n         # TYPE mithril_model_loaded gauge\n         mithril_model_loaded {}\n         # HELP mithril_info Service information\n         # TYPE mithril_info gauge\n         mithril_info{{version=\"0.3.0\"}} 1\n",
+        "# HELP mithril_up Whether the service is up\n         # TYPE mithril_up gauge\n         mithril_up 1\n         # HELP mithril_model_loaded Whether a GGUF model is loaded in memory\n         # TYPE mithril_model_loaded gauge\n         mithril_model_loaded {}\n         # HELP mithril_info Service information\n         # TYPE mithril_info gauge\n         mithril_info{{version=\"{}\"}} 1\n", env!("CARGO_PKG_VERSION"),
         if model_loaded { 1 } else { 0 }
     )
 }
