@@ -282,15 +282,15 @@
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
                     letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Providers</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    5
+                    6
                 </div>
-                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Gemini, OpenAI, Anthropic, Groq, Local</div>
+                <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">Gemini, OpenAI, Anthropic, Groq, JEV, Local</div>
             </div><div style="background:var(--card);border:2px solid var(--border);
                 border-radius:var(--radius);padding:1.2rem 1rem;text-align:center;">
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
                     letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Shared Interface</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    5 methods
+                    6 methods
                 </div>
                 <div style="font-size:.7rem;color:var(--dim);margin-top:.15rem;">ChatProvider trait</div>
             </div><div style="background:var(--card);border:2px solid var(--border);
@@ -314,15 +314,16 @@
     FACTORY --> OAI(OpenAI)
     FACTORY --> ANT(Anthropic)
     FACTORY --> GRQ(Groq)
+    FACTORY --> JEV(JEV / System 1)
     FACTORY --> LOC(Local GGUF)</pre>
-</div><h2>The ChatProvider Trait — 5 Methods Every Provider Implements</h2><div class="scomp-code-card">
+</div><h2>The ChatProvider Trait — 6 Methods Every Provider Implements</h2><div class="scomp-code-card">
 <button class="scomp-copy-btn">⧉ Copy</button>
 <h4>The Interface Contract</h4>
 <pre ><code class="language-rust">pub trait ChatProvider: Send + Sync {
-    /// Provider identifier (e.g. &quot;gemini&quot;, &quot;openai&quot;)
+    /// Provider identifier (e.g. &quot;gemini&quot;, &quot;openai&quot;, &quot;jev&quot;)
     fn name(&amp;self) -&gt; &amp;str;
     
-    /// Model being used (e.g. &quot;gemini-2.5-flash&quot;, &quot;gpt-4o&quot;)
+    /// Model being used (e.g. &quot;gemini-2.5-flash&quot;, &quot;jevos-v4&quot;)
     fn model(&amp;self) -&gt; &amp;str;
     
     /// Simple chat: send messages, get full response back
@@ -338,6 +339,11 @@
     async fn chat_with_tools(
         &amp;self, messages: &amp;[ChatMessage], tools: &amp;[ToolDefinition]
     ) -&gt; Result&lt;ChatResponse&gt;;
+
+    /// Zero-shot candidate decision / agent selection
+    async fn decide_choice(
+        &amp;self, instructions: &amp;str, state: &amp;str, candidates: &amp;HashMap&lt;String, String&gt;
+    ) -&gt; Result&lt;String&gt;;
     
     /// Health check: is the API reachable and key valid?
     async fn is_available(&amp;self) -&gt; bool;
@@ -393,6 +399,12 @@
       <td>messages[{role, content}] (OpenAI-compatible)</td>
       <td>Bearer token header</td>
       <td>api.groq.com/openai/v1/chat/completions</td>
+    </tr>
+    <tr>
+      <td>Jev</td>
+      <td>System 1 state + questions format</td>
+      <td>Bearer token header (optional)</td>
+      <td>/v1/systemone (or cloud endpoint)</td>
     </tr>
     <tr>
       <td>Local</td>
@@ -503,6 +515,12 @@
       <td>tools[] (same as OpenAI)</td>
       <td>choices[0].message.tool_calls[]</td>
       <td>Yes</td>
+    </tr>
+    <tr>
+      <td>Jev</td>
+      <td>System 1 choice / criteria questions</td>
+      <td>answers[key].choice</td>
+      <td>Yes (multi-question)</td>
     </tr>
     <tr>
       <td>Local</td>

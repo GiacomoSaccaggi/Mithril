@@ -204,6 +204,53 @@ IMPORTANT: Always use <tool_call> tags when you want to use a tool. Never descri
     async fn is_available(&self) -> bool {
         self.model_path.exists()
     }
+
+    async fn decide_choice(
+        &self,
+        instructions: &str,
+        state: &str,
+        candidates: &std::collections::HashMap<String, String>,
+    ) -> Result<String> {
+        let mut options_text = String::new();
+        for (name, desc) in candidates {
+            options_text.push_str(&format!("- {}: {}\n", name, desc));
+        }
+
+        if self.template == ChatTemplate::Jev {
+            let prompt = format!(
+                "<evidence>\n{}\n\nCandidates:\n{}\n</evidence>\n\nQuestion: {}\nAnswer:",
+                state.trim(),
+                options_text.trim(),
+                instructions.trim()
+            );
+            let stops = get_stop_tokens(ChatTemplate::Jev);
+            let reply = self.manager.infer(&prompt, &stops, 0.1, 32)?;
+            let lower = reply.trim().to_lowercase();
+            for name in candidates.keys() {
+                if lower.contains(&name.to_lowercase()) {
+                    return Ok(name.clone());
+                }
+            }
+            return Ok(reply.trim().to_string());
+        }
+
+        let prompt = format!(
+            "{}\n\nCandidates:\n{}\n\nMessage:\n{}\n\nReply with ONLY the candidate name, nothing else.",
+            instructions, options_text.trim(), state
+        );
+        let messages = vec![
+            ChatMessage::system("You are a router. Reply with ONLY one candidate name."),
+            ChatMessage::user(&prompt),
+        ];
+        let reply = self.chat(&messages).await?;
+        let lower = reply.trim().to_lowercase();
+        for name in candidates.keys() {
+            if lower.contains(&name.to_lowercase()) {
+                return Ok(name.clone());
+            }
+        }
+        Ok(reply.trim().to_string())
+    }
 }
 
 /// Parse <tool_call>...</tool_call> blocks from local model output.

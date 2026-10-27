@@ -4,11 +4,11 @@ Multi-agent orchestration: classify requests, route to agents, manage tool execu
 
 ## Key Concept
 
-A local GGUF model classifies every request (free), then routes to the right cloud agent. Agents can delegate to each other via NEXT/TASK protocol.
+A fast controller (local GGUF model like `jevos-v4` or `qwen-1.5b`, or JEV System 1 provider) classifies every request in zero-shot fashion (free or ultra-low latency), then routes to the right agent. Agents can delegate to each other via NEXT/TASK protocol.
 
 ## How It Works
 
-1. **Classification** — GGUF model reads user message, outputs agent name (~100ms, free)
+1. **Classification** — Fast decision model reads user message, outputs agent name (~20–50ms via JEV / local GGUF)
 2. **Agent Loop** — Selected agent runs with its provider, can call tools
 3. **Delegation** — Agent says `NEXT: reviewer` + `TASK: check auth.rs` to hand off
 4. **Completion** — Agent says `NEXT: DONE` → response goes to user
@@ -22,8 +22,8 @@ Start message with `#reviewer` to skip classification and route directly.
 ```yaml
 name: "my-team"
 controller:
-  provider: local
-  model: qwen-1.5b
+  provider: local       # or provider: jev
+  model: jevos-v4       # Dedicated zero-shot decision router (~620MB)
 agents:
   - name: coder
     provider: gemini

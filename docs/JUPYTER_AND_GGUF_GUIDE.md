@@ -42,6 +42,7 @@ mithril download-model --list
 ```
 
 Preconfigured models include:
+- `jevos-v4` (JevOS v4 System 1 Decision & Routing) — ~620 MB (Ultra-compact, purpose-built zero-shot candidate classifier, ~20–50ms on CPU)
 - `qwen-1.5b` (Qwen 2.5 Coder 1.5B) — ~1.2 GB (Ultra-fast, ideal for low-RAM machines or lightweight triage)
 - `qwen-7b` (Qwen 2.5 Coder 7B) — ~4.5 GB
 - `qwen-14b` (Qwen 2.5 Coder 14B) — ~9.0 GB (Strong coding capabilities)
@@ -166,7 +167,7 @@ When choosing GGUF models and quantizations, memory requirements depend on model
 ## 5. Memory Strategy: Hybrid Fellowship Architecture
 
 For memory-constrained environments (e.g. 8 GB–12 GB total RAM), the most efficient setup is Mithril's **Hybrid Fellowship**:
-1. Run a lightweight local model (`qwen-1.5b` requiring only ~1.2 GB RAM) as the **controller/router**.
+1. Run a lightweight local model (`jevos-v4` requiring only ~620 MB RAM or `qwen-1.5b` requiring ~1.2 GB) as the **controller/router**.
 2. Delegate deep reasoning, heavy refactoring, or large-context queries to cloud models (Gemini, Claude, OpenAI, Groq) or a dedicated GPU server.
 
 ### Example Configuration (`.mithril/fellowship.yaml`):
@@ -176,7 +177,7 @@ name: "jupyter-fellowship"
 
 controller:
   provider: local
-  model: qwen-1.5b       # ~1.2 GB RAM for fast local intent routing
+  model: jevos-v4        # ~620 MB RAM for fast zero-shot intent routing (~20-50ms)
   context_window: 4
 
 agents:

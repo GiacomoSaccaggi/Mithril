@@ -155,6 +155,8 @@ pub struct ProviderSettings {
     pub anthropic: AnthropicSettings,
     #[serde(default)]
     pub groq: GroqSettings,
+    #[serde(default)]
+    pub jev: JevSettings,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,6 +202,18 @@ impl Default for GroqSettings {
     fn default() -> Self { Self { model: default_groq_model(), base_url: None } }
 }
 fn default_groq_model() -> String { "meta-llama/llama-4-scout-17b-16e-instruct".to_string() }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JevSettings {
+    #[serde(default = "default_jev_model")]
+    pub model: String,
+    #[serde(default)]
+    pub base_url: Option<String>,
+}
+impl Default for JevSettings {
+    fn default() -> Self { Self { model: default_jev_model(), base_url: None } }
+}
+fn default_jev_model() -> String { "jevos-v4".to_string() }
 
 // ── Tool Permissions ─────────────────────────────────────────────────────────
 

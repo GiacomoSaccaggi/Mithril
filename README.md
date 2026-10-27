@@ -2,7 +2,7 @@
 
 > *"Mithril! All folk desired it. It could be beaten like copper, and polished like glass; and the Dwarves could make of it a metal, light and yet harder than tempered steel."* — Gandalf
 
-**A multi-model orchestration backend.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
+**A multi-model orchestration backend.** Combine any mix of LLM providers (Gemini, OpenAI, Anthropic, Groq, JEV, local GGUF) into a single Ollama-compatible API endpoint. Configure who does what in a YAML file, then point any AI tool at it.
 
 [![Build](https://img.shields.io/badge/build-cargo-orange)](https://doc.rust-lang.org/cargo/)
 [![PyPI version](https://img.shields.io/pypi/v/mithril-cli.svg)](https://pypi.org/project/mithril-cli/)
@@ -84,20 +84,21 @@ graph TB
     end
 
     subgraph "Mithril Engine"
-        API[API Layer<br/>Ollama + OpenAI + MCP]
-        ORCH[Orchestrator<br/>GGUF Classifier → Agent Routing]
+        API[API Layer<br/>Ollama + OpenAI + MCP + System 1]
+        ORCH[Orchestrator<br/>Zero-Shot Classifier (JEV / GGUF) → Agent Routing]
         TOOLS[24 Built-in Tools<br/>File, Git, Web, Code, Terminal]
     end
 
-    subgraph "Cloud API Providers"
+    subgraph "Cloud API & Decision Providers"
         G[Gemini]
         GPT[OpenAI]
         A[Anthropic]
         GR[Groq]
+        JEV[JEV System 1]
     end
 
     subgraph "Local"
-        LOCAL[Local GGUF]
+        LOCAL[Local GGUF<br/>jevos-v4, qwen, llama]
     end
 
     subgraph "CLI Providers"
@@ -118,6 +119,7 @@ graph TB
     ORCH --> GPT
     ORCH --> A
     ORCH --> GR
+    ORCH --> JEV
     ORCH --> LOCAL
     ORCH --> K
     ORCH --> JN
@@ -236,6 +238,7 @@ MITHRIL_KEY_GEMINI=AIza...
 MITHRIL_KEY_OPENAI=sk-...
 MITHRIL_KEY_ANTHROPIC=sk-ant-...
 MITHRIL_KEY_GROQ=gsk_...
+MITHRIL_KEY_JEV=...        # Optional for JEV cloud endpoints
 ```
 
 No secrets are stored in the Docker image. Mount `.mithril/fellowship.yaml` for your agent configuration.
@@ -252,7 +255,7 @@ description: "Multi-model coding assistant"
 
 controller:
   provider: local         # Routes requests (free, fast)
-  model: qwen-1.5b
+  model: jevos-v4         # Dedicated zero-shot decision router (~620MB, ~20-50ms)
   context_window: 2       # Messages the router sees
 
 agents:
@@ -281,12 +284,13 @@ Agents communicate via the NEXT/TASK protocol:
 
 ## Provider Types
 
-Mithril supports three types of providers:
+Mithril supports four types of providers:
 
 | Type | Examples | How It Works |
 |------|----------|--------------|
-| **Local GGUF** | qwen-1.5b, qwen-14b, llama-8b | Direct inference via llama.cpp (free, private, fast for routing) |
+| **Local GGUF** | jevos-v4, qwen-1.5b, qwen-14b, llama-8b | Direct inference via llama.cpp (free, private, fast for routing) |
 | **Cloud API** | Gemini, OpenAI, Anthropic, Groq | HTTP calls to cloud LLM endpoints (pay-per-token) |
+| **Decision / System 1** | JEV (`jevos-v4` via HTTP or local GGUF) | Zero-shot agent selection and classification engine (`POST /v1/systemone`) |
 | **CLI Tools** | Kiro, Junie, Copilot, any CLI | Subprocess calls to local CLI tools that have their own model access |
 
 ```yaml
@@ -295,7 +299,7 @@ name: "my-team"
 
 controller:
   provider: local          # Local GGUF (free, used for routing)
-  model: qwen-1.5b
+  model: jevos-v4          # Dedicated zero-shot decision router (~20-50ms)
 
 agents:
   # Cloud API provider
@@ -321,7 +325,7 @@ agents:
 
 CLI providers are useful when you have access to tools like Kiro, Junie, or GitHub Copilot with their own authentication and model access. Mithril orchestrates them as part of your fellowship without needing separate API keys.
 
-> **Note on the controller:** The controller defaults to a local GGUF model which is free, fast (~100ms), and private. You can use any provider as controller, but it's not worth the cost unless precise routing justifies paying per-classification.
+> **Note on the controller:** The controller defaults to a local GGUF model (`jevos-v4` or `qwen-1.5b`) which is free, fast (~20–100ms), and private. `jevos-v4` is purpose-trained for zero-shot candidate selection. You can also connect to a remote JEV service via `provider: jev`.
 
 ---
 
@@ -337,6 +341,7 @@ CLI providers are useful when you have access to tools like Kiro, Junie, or GitH
 | `POST /api/rerank` | Ollama | Reranking |
 | `POST /v1/chat/completions` | OpenAI | Chat completion |
 | `GET /v1/models` | OpenAI | List models |
+| `POST /v1/systemone` | JEV | System 1 zero-shot decision & classification routing |
 | `POST /mcp` | MCP | JSON-RPC tool calls |
 
 ---

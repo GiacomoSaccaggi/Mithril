@@ -123,6 +123,16 @@ impl ChatProvider for RedactingProvider {
         log_redaction(total);
         self.inner.embed(&redacted).await
     }
+
+    async fn decide_choice(
+        &self,
+        instructions: &str,
+        state: &str,
+        candidates: &std::collections::HashMap<String, String>,
+    ) -> Result<String> {
+        let redacted_state = redact::redact_secrets(state).text;
+        self.inner.decide_choice(instructions, &redacted_state, candidates).await
+    }
 }
 
 #[cfg(test)]

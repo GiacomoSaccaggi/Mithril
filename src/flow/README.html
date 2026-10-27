@@ -301,10 +301,10 @@
                     2,341
                 </div>
                 
-            </div></div><h2>Key Concept</h2><p><p style='font-size:1.1rem;'>A local GGUF model classifies every request (free), then routes to the right cloud agent. Agents can delegate to each other via NEXT/TASK protocol.</p></p><div class="scomp-mermaid-card">
+            </div></div><h2>Key Concept</h2><p><p style='font-size:1.1rem;'>A fast controller (local GGUF model like <code>jevos-v4</code> or <code>qwen-1.5b</code>, or JEV System 1 provider) classifies every request in zero-shot fashion (free or ultra-low latency), then routes to the right agent. Agents can delegate to each other via NEXT/TASK protocol.</p></p><div class="scomp-mermaid-card">
 <h4>Orchestration Flow</h4>
 <pre class="mermaid">flowchart TD
-    REQ(User Request) --> CLASS(GGUF Classifier)
+    REQ(User Request) --> CLASS(Zero-Shot Classifier / JEV)
     CLASS -->|agent name| LOOP(Agent Loop)
     LOOP -->|call provider| PROV(Provider API)
     PROV -->|tool calls?| EXEC(Tool Execution)
@@ -313,9 +313,9 @@
     LOOP -->|NEXT agent| DELEG(Delegate to Agent)
     DELEG --> LOOP</pre>
 </div><button class="collapsiblemygs">How Orchestration Works</button> <div class="content"><p>
-        <h3>Step 1: Classification (Free)</h3>
-        <p>A tiny local GGUF model (1.5B params, runs on CPU in ~100ms) reads the user's message and outputs 
-        the NAME of the best agent to handle it. No cloud API call needed.</p>
+        <h3>Step 1: Classification (Free or Low Latency)</h3>
+        <p>A dedicated fast router (such as <code>jevos-v4</code> ~620MB running on CPU in ~20–50ms, or <code>qwen-1.5b</code>) 
+        reads the user's message and selects the best candidate agent via zero-shot choice evaluation. No expensive cloud tokens needed.</p>
         
         <h3>Step 2: Agent Execution Loop</h3>
         <p>The selected agent runs with its configured provider (e.g., Gemini Flash). It can:</p>
@@ -342,8 +342,8 @@
 <h4>fellowship.yaml example</h4>
 <pre ><code class="language-yaml">name: &quot;my-team&quot;
 controller:
-  provider: local       # Free GGUF router
-  model: qwen-1.5b
+  provider: local       # Free router (local GGUF or provider: jev)
+  model: jevos-v4       # Dedicated zero-shot decision router (~620MB)
 
 agents:
   - name: coder

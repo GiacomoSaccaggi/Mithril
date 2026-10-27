@@ -27,6 +27,7 @@ pub mod copilot;
 pub mod junie;
 pub mod glean;
 pub mod redacting;
+pub mod jev;
 mod gemini;
 mod openai;
 mod anthropic;
@@ -37,6 +38,7 @@ pub use gemini::GeminiProvider;
 pub use openai::OpenAIProvider;
 pub use anthropic::AnthropicProvider;
 pub use groq::GroqProvider;
+pub use jev::JevProvider;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -176,6 +178,37 @@ pub trait ChatProvider: Send + Sync {
     async fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>> {
         anyhow::bail!("Embeddings not supported by {} provider", self.name())
     }
+
+    /// Make a zero-shot choice decision among candidates.
+    /// Used for agent routing and classification tasks.
+    /// Decision models like JEV implement this natively; other models fall back to chat().
+    async fn decide_choice(
+        &self,
+        instructions: &str,
+        state: &str,
+        candidates: &std::collections::HashMap<String, String>,
+    ) -> Result<String> {
+        let mut options_text = String::new();
+        for (name, desc) in candidates {
+            options_text.push_str(&format!("- {}: {}\n", name, desc));
+        }
+        let prompt = format!(
+            "{}\n\nCandidates:\n{}\n\nMessage:\n{}\n\nReply with ONLY the candidate name, nothing else.",
+            instructions, options_text.trim(), state
+        );
+        let messages = vec![
+            ChatMessage::system("You are a router. Reply with ONLY one candidate name."),
+            ChatMessage::user(&prompt),
+        ];
+        let reply = self.chat(&messages).await?;
+        let lower = reply.trim().to_lowercase();
+        for name in candidates.keys() {
+            if lower.contains(&name.to_lowercase()) {
+                return Ok(name.clone());
+            }
+        }
+        Ok(reply.trim().to_string())
+    }
 }
 
 /// Create provider from name (uses model from global config).
@@ -246,6 +279,15 @@ pub fn create_provider_with_model(
                 api_key, model, config.providers.groq.base_url.clone(),
             ))
         }
+        "jev" => {
+            let model = model_override.unwrap_or(&config.providers.jev.model);
+            let base_url = config.providers.jev.base_url.clone()
+                .or_else(|| std::env::var("JEV_BASE_URL").ok())
+                .unwrap_or_else(|| "http://127.0.0.1:8017".to_string());
+            let api_key = config.get_credential("jev").ok().flatten()
+                .or_else(|| std::env::var("JEV_API_KEY").ok());
+            Box::new(jev::JevProvider::new(model, base_url, api_key))
+        }
         "glean" => {
             let cookies = config
                 .get_credential("glean")?
@@ -255,13 +297,13 @@ pub fn create_provider_with_model(
             let _model = model_override.unwrap_or("default");
             Box::new(glean::GleanProvider::new(&instance, &cookies))
         }
-        _ => anyhow::bail!("Unknown provider: {}. Available: local, gemini, openai, anthropic, groq, glean", name),
+        _ => anyhow::bail!("Unknown provider: {}. Available: local, gemini, openai, anthropic, groq, glean, jev", name),
     };
 
     // Wrap cloud providers with input redaction (unless disabled)
     let should_redact = config.redact_input
         && std::env::var("MITHRIL_REDACT_INPUT").ok().map(|v| v != "false" && v != "0").unwrap_or(true);
-    let is_local = matches!(name, "local" | "kiro" | "junie" | "copilot");
+    let is_local = matches!(name, "local" | "kiro" | "junie" | "copilot" | "jev");
 
     if should_redact && !is_local {
         let should_redact_llm = config.redact_llm
@@ -287,7 +329,7 @@ pub fn create_provider_with_model(
 
 /// List all available providers
 pub fn available_providers() -> Vec<&'static str> {
-    vec!["local", "gemini", "openai", "anthropic", "groq", "glean"]
+    vec!["local", "gemini", "openai", "anthropic", "groq", "glean", "jev"]
 }
 
 
@@ -377,7 +419,8 @@ mod tests {
         assert!(providers.contains(&"anthropic"));
         assert!(providers.contains(&"groq"));
         assert!(providers.contains(&"glean"));
-        assert_eq!(providers.len(), 6);
+        assert!(providers.contains(&"jev"));
+        assert_eq!(providers.len(), 7);
     }
 
     #[test]

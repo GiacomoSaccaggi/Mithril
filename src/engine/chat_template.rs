@@ -9,6 +9,8 @@ pub enum ChatTemplate {
     Llama3,
     /// Phi-3 format: <|role|>\ncontent<|end|>
     Phi3,
+    /// JEV decision/classification format: <evidence>\n...\n</evidence>\n\nQuestion: ...\nAnswer:
+    Jev,
 }
 
 #[derive(Debug, Clone)]
@@ -34,6 +36,7 @@ pub fn format_chat(template: ChatTemplate, messages: &[ChatMessage]) -> String {
         ChatTemplate::ChatML => format_chatml(messages),
         ChatTemplate::Llama3 => format_llama3(messages),
         ChatTemplate::Phi3 => format_phi3(messages),
+        ChatTemplate::Jev => format_jev(messages),
     }
 }
 
@@ -44,6 +47,13 @@ pub fn get_stop_tokens(template: ChatTemplate) -> Vec<String> {
         ChatTemplate::ChatML => vec!["<|im_end|>".into(), "<|im_start|>".into()],
         ChatTemplate::Llama3 => vec!["<|eot_id|>".into(), "<|start_header_id|>".into()],
         ChatTemplate::Phi3 => vec!["<|end|>".into(), "<|user|>".into()],
+        ChatTemplate::Jev => vec![
+            "<|im_end|>".into(),
+            "<|im_start|>".into(),
+            "\nQuestion:".into(),
+            "\n<evidence>".into(),
+            "</s>".into(),
+        ],
     }
 }
 
@@ -77,9 +87,58 @@ fn format_phi3(messages: &[ChatMessage]) -> String {
     s
 }
 
+fn format_jev(messages: &[ChatMessage]) -> String {
+    let mut evidence = String::new();
+    let mut question = String::new();
+    for msg in messages {
+        match msg.role.as_str() {
+            "system" => {
+                if !question.is_empty() {
+                    question.push(' ');
+                }
+                question.push_str(&msg.content);
+            }
+            "user" => {
+                if evidence.is_empty() {
+                    evidence.push_str(&msg.content);
+                } else {
+                    evidence.push('\n');
+                    evidence.push_str(&msg.content);
+                }
+            }
+            "assistant" => {
+                evidence.push_str(&format!("\nPrevious answer: {}", msg.content));
+            }
+            _ => {
+                evidence.push_str(&msg.content);
+            }
+        }
+    }
+    if question.is_empty() {
+        question = "What is the answer?".to_string();
+    }
+    format!(
+        "<evidence>\n{}\n</evidence>\n\nQuestion: {}\nAnswer:",
+        evidence.trim(),
+        question.trim()
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_jev_format() {
+        let messages = vec![
+            ChatMessage::new("system", "Which agent should handle this?"),
+            ChatMessage::new("user", "Fix bug in auth handler"),
+        ];
+        let result = format_chat(ChatTemplate::Jev, &messages);
+        assert!(result.starts_with("<evidence>\nFix bug in auth handler\n</evidence>"));
+        assert!(result.contains("Question: Which agent should handle this?"));
+        assert!(result.ends_with("\nAnswer:"));
+    }
 
     #[test]
     fn test_chatml_format() {
@@ -114,5 +173,7 @@ mod tests {
     fn test_stop_tokens() {
         let stops = get_stop_tokens(ChatTemplate::ChatML);
         assert!(stops.contains(&"<|im_end|>".to_string()));
+        let jev_stops = get_stop_tokens(ChatTemplate::Jev);
+        assert!(jev_stops.contains(&"\nQuestion:".to_string()));
     }
 }

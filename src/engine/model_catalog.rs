@@ -73,6 +73,16 @@ pub const MODELS: &[ModelInfo] = &[
         quantization: "Q4_K_M",
         chat_template: ChatTemplate::Phi3,
     },
+    ModelInfo {
+        id: "jevos-v4",
+        display_name: "JevOS v4 (Decision & Routing, ~620MB)",
+        file_name: "jevos-v4-q4_k_m.gguf",
+        download_url: "https://huggingface.co/feder-cr/jev/resolve/main/jevos-v4-q4_k_m.gguf",
+        family: "jev",
+        parameter_size: "882M",
+        quantization: "Q4_K_M",
+        chat_template: ChatTemplate::Jev,
+    },
 ];
 
 /// Find a model by ID, with normalization for Ollama-style names.
@@ -95,6 +105,7 @@ fn normalize_ollama_name(name: &str) -> &'static str {
         "llama3.1:8b" | "llama3.1-8b" | "llama:8b" | "llama3:8b" => "llama-8b",
         "deepseek-coder:6.7b" | "deepseek-coder-6.7b" => "deepseek-6.7b",
         "phi3.5" | "phi3.5:3.8b" | "phi-3.5:3.8b" | "phi3:3.8b" => "phi-3.5",
+        "jevos-v4" | "jevos:v4" | "jev" | "jev:latest" | "jevos" | "jevos:latest" | "jevos-v4-q4_k_m" => "jevos-v4",
         _ => "",
     }
 }
@@ -110,6 +121,7 @@ mod tests {
         assert!(find_model("llama-8b").is_some());
         assert!(find_model("deepseek-6.7b").is_some());
         assert!(find_model("phi-3.5").is_some());
+        assert!(find_model("jevos-v4").is_some());
     }
 
     #[test]
@@ -118,6 +130,11 @@ mod tests {
         let m2 = find_model("qwen-1.5b");
         assert!(m1.is_some());
         assert_eq!(m1.unwrap().id, m2.unwrap().id);
+
+        let j1 = find_model("jev:latest");
+        let j2 = find_model("jevos-v4");
+        assert!(j1.is_some());
+        assert_eq!(j1.unwrap().id, j2.unwrap().id);
     }
 
     #[test]

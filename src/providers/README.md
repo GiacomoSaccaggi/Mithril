@@ -17,6 +17,9 @@ Same as chat() but tokens arrive one-by-one via a channel. Used for real-time ou
 ### chat_with_tools(messages, tools) → ChatResponse
 Function calling. The model can either respond with text OR request tool executions.
 
+### decide_choice(instructions, state, candidates) → String
+Zero-shot multiple-choice decision. Evaluates state and candidate options directly and returns the selected candidate key (~20–50ms with JEV or local GGUF).
+
 ## Provider Differences
 
 | Provider | Auth | Message Format | Endpoint |
@@ -25,7 +28,8 @@ Function calling. The model can either respond with text OR request tool executi
 | OpenAI | Bearer header | messages[{role, content}] | api.openai.com/v1 |
 | Anthropic | x-api-key header | messages[] + system separate | api.anthropic.com/v1 |
 | Groq | Bearer header | messages[] (OpenAI-compatible) | api.groq.com/openai/v1 |
-| Local | N/A | Direct GGUF inference | In-process (no HTTP) |
+| Jev | Bearer header (optional) | System 1 format (state + questions) | /v1/systemone or custom base_url |
+| Local | N/A | Direct GGUF inference | In-process (llama.cpp) |
 
 ## Adding a New Provider
 
@@ -41,4 +45,10 @@ Function calling. The model can either respond with text OR request tool executi
 - `openai.rs` — OpenAI / Azure adapter (configurable base_url)
 - `anthropic.rs` — Anthropic Claude adapter
 - `groq.rs` — Groq cloud adapter (OpenAI-compatible)
+- `jev.rs` — JEV System 1 zero-shot decision & routing adapter
 - `local.rs` — Local GGUF inference via llama.cpp
+- `redacting.rs` — Secret redacting decorator for providers
+- `kiro.rs` — Kiro CLI subprocess provider
+- `copilot.rs` — GitHub Copilot CLI subprocess provider
+- `junie.rs` — Junie CLI subprocess provider
+- `glean.rs` — Glean workspace search provider

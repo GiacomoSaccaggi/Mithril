@@ -404,14 +404,15 @@ echo &quot;MITHRIL_KEY_GEMINI=AIzaSy...&quot; &gt; .env
 docker compose up -d
 
 # Connect: Junie → Ollama → http://server:16180</code></pre>
-</div></div><button class="collapsiblemygs">All 8 Providers</button> <div class="content"><p>
+</div></div><button class="collapsiblemygs">All 9 Providers</button> <div class="content"><p>
 <table style="width:100%;font-size:.85rem;border-collapse:collapse;">
 <tr style="border-bottom:2px solid var(--border);"><th>Provider</th><th>Type</th><th>Auth</th><th>Cost</th><th>Best For</th></tr>
-<tr style="border-bottom:1px solid var(--border);"><td><code>local</code></td><td>GGUF</td><td>None</td><td>Free</td><td>Routing, offline coding (qwen-14b)</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>local</code></td><td>GGUF</td><td>None</td><td>Free</td><td>Routing (jevos-v4), offline coding (qwen-14b)</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>gemini</code></td><td>Cloud</td><td>API key</td><td>$$$</td><td>Main workhorse (cheap + fast)</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>openai</code></td><td>Cloud</td><td>API key</td><td>$$$$</td><td>GPT-4o, o1 reasoning</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>anthropic</code></td><td>Cloud</td><td>API key</td><td>$$$$</td><td>Claude for careful analysis</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>groq</code></td><td>Cloud</td><td>API key</td><td>$$</td><td>Fast inference (Llama, Mixtral)</td></tr>
+<tr style="border-bottom:1px solid var(--border);"><td><code>jev</code></td><td>Decision / Service</td><td>Bearer (optional)</td><td>Low / Free (local)</td><td>Fast zero-shot routing &amp; System 1 decisions (jevos-v4)</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>kiro</code></td><td>CLI</td><td>AWS Builder ID</td><td>Credits</td><td>Claude Opus/Sonnet via Kiro</td></tr>
 <tr style="border-bottom:1px solid var(--border);"><td><code>copilot</code></td><td>CLI</td><td>gh auth</td><td>2000/mo</td><td>GPT-5.4, cross-platform</td></tr>
 <tr><td><code>junie</code></td><td>CLI</td><td>JetBrains</td><td>10 credits</td><td>Fable-5, integrated tools</td></tr>

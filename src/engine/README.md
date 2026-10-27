@@ -17,13 +17,17 @@ The LazyModelManager loads the model only on first use, keeps it in memory, and 
 
 | Model | Size | Use |
 |-------|------|-----|
-| qwen2:1.5b | ~1.2 GB | Request classifier (free routing) |
-| qwen2:7b | ~4.5 GB | General coding |
-| llama:8b | ~5 GB | Alternative general |
+| jevos-v4 | ~620 MB | Zero-shot agent router & System 1 decision engine (~20–50ms) |
+| qwen-1.5b | ~1.2 GB | Request classifier (free routing) |
+| qwen-7b | ~4.5 GB | General coding |
+| qwen-14b | ~9.0 GB | Strong offline coding |
+| llama-8b | ~5.0 GB | Alternative general |
+| deepseek-6.7b | ~4.5 GB | Code completion & review |
+| phi-3.5 | ~2.5 GB | Lightweight instruction model |
 
 ## Files
 
-- `chat_template.rs` — 
+- `chat_template.rs` — Chat prompt formatters and stop tokens (ChatML, Llama3, Phi3, Jev).
 - `lazy_model.rs` — Lazy model manager — loads GGUF on first use, auto-unloads after idle timeout.
-- `mod.rs` — 
-- `model_catalog.rs` — 
+- `mod.rs` — Engine module exports and lazy manager instance.
+- `model_catalog.rs` — Pre-registered GGUF models catalog (including `jevos-v4`) and name normalizer.

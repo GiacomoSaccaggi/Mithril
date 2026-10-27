@@ -799,3 +799,57 @@ async fn test_mcp_tools_list_has_correct_schema() {
         assert!(names.contains(expected), "missing tool: {expected}");
     }
 }
+
+#[tokio::test]
+async fn test_systemone_endpoint_responds_without_crash() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/v1/systemone"))
+        .json(&serde_json::json!({
+            "model": "jevos-v4",
+            "state": "The user reported a bug in the compiler parser.",
+            "questions": {
+                "route": {
+                    "type": "choice",
+                    "instructions": "Which agent should handle this?",
+                    "criteria": {
+                        "coder": "Fixes bugs and writes code",
+                        "reviewer": "Reviews pull requests"
+                    }
+                }
+            }
+        }))
+        .send()
+        .await
+        .unwrap();
+
+    // Since mock server has no model file, it will return 500 cleanly with JSON error
+    assert!(res.status().is_server_error() || res.status().is_success());
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert!(body["error"].is_object() || body["answers"].is_object());
+}
+
+#[tokio::test]
+async fn test_systemone_malformed_json_returns_422() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/v1/systemone"))
+        .header("content-type", "application/json")
+        .body("{ bad json")
+        .send()
+        .await
+        .unwrap();
+    assert!(res.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_jev_model_catalog_registration() {
+    use mithril::engine::model_catalog::find_model;
+    let model = find_model("jevos-v4").expect("jevos-v4 should exist in catalog");
+    assert_eq!(model.family, "jev");
+    assert_eq!(model.chat_template, mithril::engine::chat_template::ChatTemplate::Jev);
+    assert!(model.download_url.contains("huggingface.co"));
+
+    let alias = find_model("jev:latest").expect("jev:latest alias should resolve");
+    assert_eq!(alias.id, "jevos-v4");
+}

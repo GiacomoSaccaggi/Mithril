@@ -290,7 +290,7 @@
                 <div style="font-size:.75rem;color:var(--dim);text-transform:uppercase;
                     letter-spacing:.04em;font-weight:600;margin-bottom:.4rem;">Files</div>
                 <div style="font-size:1.6rem;font-weight:800;color:var(--text);">
-                    5
+                    6
                 </div>
                 
             </div><div style="background:var(--card);border:2px solid var(--border);
@@ -317,7 +317,12 @@
             <li><code>POST /v1/chat/completions</code> — chat completion</li>
         </ul>
         
-        <h3>3. MCP Protocol (for Claude Desktop)</h3>
+        <h3>3. JEV System 1 API (for Fast Zero-Shot Decisions)</h3>
+        <ul>
+            <li><code>POST /v1/systemone</code> — zero-shot decision &amp; classification routing</li>
+        </ul>
+
+        <h3>4. MCP Protocol (for Claude Desktop)</h3>
         <ul>
             <li><code>POST /mcp</code> — JSON-RPC 2.0 for tool discovery and execution</li>
         </ul>
@@ -325,7 +330,7 @@
         <h3>How Clients Connect</h3>
         <p>Point any Ollama-compatible client to <code>http://localhost:16180</code>. 
         Fellowships appear as selectable "models". The client doesn't know it's talking to 
-        an orchestrated team of models.</p>
+        an orchestrated team of models. Direct decision requests can be sent to <code>POST /v1/systemone</code>.</p>
     </p></div><button class="collapsiblemygs">Endpoint Reference</button> <div class="content"><a href="#" onclick="download_table_as_csv('endpoints');">Download as CSV</a>
             <div id="table-wrapper">
                 <div id="table-scroll">
@@ -369,6 +374,11 @@
       <td>Chat completion</td>
     </tr>
     <tr>
+      <td>POST /v1/systemone</td>
+      <td>JEV</td>
+      <td>System 1 zero-shot decision &amp; classification routing</td>
+    </tr>
+    <tr>
       <td>POST /mcp</td>
       <td>MCP</td>
       <td>JSON-RPC tool calls (24 tools)</td>
@@ -403,7 +413,7 @@
                 .scomp-table tbody tr:hover {
                     background-color: #9682FF22;
                 }
-            </style></div><button class="collapsiblemygs">File Inventory</button> <div class="content"><p><table style='width:100%;font-size:.85rem;'><tr><th style='text-align:left;'>File</th><th>Purpose</th></tr><tr><td><code>mcp.rs</code></td><td></td></tr><tr><td><code>mod.rs</code></td><td></td></tr><tr><td><code>ollama.rs</code></td><td></td></tr><tr><td><code>openai.rs</code></td><td></td></tr><tr><td><code>server.rs</code></td><td></td></tr></table></p></div>
+            </style></div><button class="collapsiblemygs">File Inventory</button> <div class="content"><p><table style='width:100%;font-size:.85rem;'><tr><th style='text-align:left;'>File</th><th>Purpose</th></tr><tr><td><code>mcp.rs</code></td><td>Model Context Protocol JSON-RPC 2.0 tool execution.</td></tr><tr><td><code>mod.rs</code></td><td>API routes and state definition.</td></tr><tr><td><code>ollama.rs</code></td><td>Ollama-compatible API handlers (/api/tags, /api/chat, /api/generate).</td></tr><tr><td><code>openai.rs</code></td><td>OpenAI-compatible API handlers (/v1/models, /v1/chat/completions).</td></tr><tr><td><code>server.rs</code></td><td>Axum HTTP server setup, middleware, and route mounting.</td></tr><tr><td><code>systemone.rs</code></td><td>JEV System 1 zero-shot classification & decision routing handler (/v1/systemone).</td></tr></table></p></div>
                             </div>
                             
                         <script>

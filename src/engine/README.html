@@ -336,6 +336,11 @@
   </thead>
   <tbody>
     <tr>
+      <td>jevos-v4</td>
+      <td>~620 MB</td>
+      <td>Zero-shot agent router & System 1 decision engine (~20–50ms)</td>
+    </tr>
+    <tr>
       <td>qwen2:1.5b</td>
       <td>~1.2 GB</td>
       <td>Request classifier (free routing)</td>
@@ -390,7 +395,7 @@
                 .scomp-table tbody tr:hover {
                     background-color: #9682FF22;
                 }
-            </style></div><button class="collapsiblemygs">File Inventory</button> <div class="content"><p><table style='width:100%;font-size:.85rem;'><tr><th style='text-align:left;'>File</th><th>Purpose</th></tr><tr><td><code>chat_template.rs</code></td><td></td></tr><tr><td><code>lazy_model.rs</code></td><td>Lazy model manager — loads GGUF on first use, auto-unloads after idle timeout.</td></tr><tr><td><code>mod.rs</code></td><td></td></tr><tr><td><code>model_catalog.rs</code></td><td></td></tr></table></p></div>
+            </style></div><button class="collapsiblemygs">File Inventory</button> <div class="content"><p><table style='width:100%;font-size:.85rem;'><tr><th style='text-align:left;'>File</th><th>Purpose</th></tr><tr><td><code>chat_template.rs</code></td><td>Chat prompt formatters and stop tokens (ChatML, Llama3, Phi3, Jev).</td></tr><tr><td><code>lazy_model.rs</code></td><td>Lazy model manager — loads GGUF on first use, auto-unloads after idle timeout.</td></tr><tr><td><code>mod.rs</code></td><td>Engine module exports and lazy manager instance.</td></tr><tr><td><code>model_catalog.rs</code></td><td>Pre-registered GGUF models catalog (including jevos-v4) and name normalizer.</td></tr></table></p></div>
                             </div>
                             
                         <script>

@@ -137,16 +137,11 @@ impl Orchestrator {
     }
 
     async fn classify_entry(&mut self, user_message: &str) -> Result<String> {
-        let labels: Vec<String> = self.config.agents.iter()
-            .filter(|a| a.when.is_some())
-            .map(|a| format!("- {} — {}", a.name, a.when.as_deref().unwrap_or(&a.role)))
-            .collect();
-
-        let prompt = format!(
-            "Which agent should handle this? Reply with ONLY the agent name, nothing else.\n\nAgents:\n{}\n\nMessage: {}",
-            labels.join("
-"), user_message
-        );
+        let mut candidates = std::collections::HashMap::new();
+        for agent in &self.config.agents {
+            let desc = agent.when.as_deref().unwrap_or(&agent.role);
+            candidates.insert(agent.name.clone(), desc.to_string());
+        }
 
         let controller = providers::create_provider_with_model(
             &self.config.controller.provider,
@@ -154,13 +149,15 @@ impl Orchestrator {
             &self.mithril_config,
         )?;
 
-        let response = controller.chat(&[
-            ChatMessage::system("You are a classifier. Reply with ONLY one agent name. No explanation."),
-            ChatMessage::user(&prompt),
-        ]).await?;
+        let response = controller.decide_choice(
+            "Which agent should handle this request?",
+            user_message,
+            &candidates,
+        ).await?;
 
-        let usage = TokenUsage::estimate(&prompt, &response);
-        self.tokens.record("gguf", &usage);
+        let usage = TokenUsage::estimate(user_message, &response);
+        let provider_name = if self.config.controller.provider == "local" { "gguf" } else { &self.config.controller.provider };
+        self.tokens.record(provider_name, &usage);
 
         // Find which agent name appears in the response
         let resp_lower = response.trim().to_lowercase();

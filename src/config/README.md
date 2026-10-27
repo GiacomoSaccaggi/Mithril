@@ -18,7 +18,14 @@ API keys are encrypted at rest. In Docker, env vars (MITHRIL_KEY_<PROVIDER>) tak
 ```bash
 MITHRIL_KEY_GEMINI=AIza...
 MITHRIL_KEY_OPENAI=sk-...
+MITHRIL_KEY_ANTHROPIC=sk-ant-...
+MITHRIL_KEY_GROQ=gsk_...
+MITHRIL_KEY_JEV=...        # Optional for JEV cloud/service endpoints
 ```
+
+## Provider Settings in config.yaml
+
+Under `providers:`, custom configurations can be supplied for `gemini`, `openai`, `anthropic`, `groq`, and `jev` (e.g. `jev.model: "jevos-v4"`, `jev.base_url: "http://localhost:8017"`).
 
 ## Files
 
