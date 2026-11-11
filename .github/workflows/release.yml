@@ -257,14 +257,67 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'GiacomoSaccaggi/Mithril'
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
-      - name: Extract version
-        id: ver
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-      - name: Update tap
-        uses: dawidd6/action-homebrew-bump-formula@v3
+      - name: Check HOMEBREW_TAP_TOKEN
+        if: env.HOMEBREW_TAP_TOKEN == ''
+        run: echo "Skipping Homebrew tap update because HOMEBREW_TAP_TOKEN secret is not configured."
+      - uses: actions/download-artifact@v4
+        if: env.HOMEBREW_TAP_TOKEN != ''
         with:
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          tap: GiacomoSaccaggi/homebrew-tap
-          formula: mithril
-          tag: ${{ steps.ver.outputs.tag }}
+          pattern: mithril-*
+          path: artifacts
+      - name: Update tap formula
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          SHA_MAC_ARM=$(sha256sum artifacts/mithril-macos-arm64/mithril-macos-arm64.tar.gz | awk '{print $1}')
+          SHA_MAC_X64=$(sha256sum artifacts/mithril-macos-x64/mithril-macos-x64.tar.gz | awk '{print $1}')
+          SHA_LIN_ARM=$(sha256sum artifacts/mithril-linux-arm64/mithril-linux-arm64.tar.gz | awk '{print $1}')
+          SHA_LIN_X64=$(sha256sum artifacts/mithril-linux-x64/mithril-linux-x64.tar.gz | awk '{print $1}')
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/GiacomoSaccaggi/homebrew-tap.git" tap
+          cat > tap/Formula/mithril.rb <<EOF
+          class Mithril < Formula
+            desc "Multi-model orchestration engine. Combine LLM providers into one Ollama-compatible API."
+            homepage "https://github.com/GiacomoSaccaggi/Mithril"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/GiacomoSaccaggi/Mithril/releases/download/v${VERSION}/mithril-macos-arm64.tar.gz"
+                sha256 "${SHA_MAC_ARM}"
+              end
+              on_intel do
+                url "https://github.com/GiacomoSaccaggi/Mithril/releases/download/v${VERSION}/mithril-macos-x64.tar.gz"
+                sha256 "${SHA_MAC_X64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/GiacomoSaccaggi/Mithril/releases/download/v${VERSION}/mithril-linux-arm64.tar.gz"
+                sha256 "${SHA_LIN_ARM}"
+              end
+              on_intel do
+                url "https://github.com/GiacomoSaccaggi/Mithril/releases/download/v${VERSION}/mithril-linux-x64.tar.gz"
+                sha256 "${SHA_LIN_X64}"
+              end
+            end
+
+            def install
+              bin.install "mithril"
+            end
+
+            test do
+              assert_match "mithril ${VERSION}", shell_output("#{bin}/mithril --version")
+            end
+          end
+          EOF
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/mithril.rb
+          git diff --cached --quiet || (git commit -m "mithril ${VERSION}" && git push)
