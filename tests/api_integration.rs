@@ -853,3 +853,104 @@ async fn test_jev_model_catalog_registration() {
     let alias = find_model("jev:latest").expect("jev:latest alias should resolve");
     assert_eq!(alias.id, "jevos-v4");
 }
+
+// ── ProjectCompass Compatibility E2E ──────────────────────────────────────────
+
+#[tokio::test]
+async fn test_projectcompass_mithril_init_pull_with_name_and_form_urlencoded() {
+    let base = spawn_server().await;
+    // Simulates: curl -sf http://mithril:16180/api/pull -d '{"name":"qwen2:1.5b"}'
+    let res = reqwest::Client::new()
+        .post(format!("{base}/api/pull"))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(r#"{"name":"qwen2:1.5b"}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    assert_eq!(body["model"], "qwen-1.5b");
+    assert_eq!(body["requested"], "qwen2:1.5b");
+}
+
+#[tokio::test]
+async fn test_projectcompass_model_names_resolve_in_show() {
+    let base = spawn_server().await;
+    for tag in [
+        "qwen2:1.5b",
+        "qwen2:1.5b:latest",
+        "qwen2:7b",
+        "qwen2:14b",
+        "deepseek:6.7b",
+        "jev:882m",
+        "llama:8b",
+        "phi3:3.8b",
+    ] {
+        let res = reqwest::Client::new()
+            .post(format!("{base}/api/show"))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(format!(r#"{{"name":"{tag}"}}"#))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 200, "expected 200 for tag {tag}");
+    }
+}
+
+#[tokio::test]
+async fn test_api_tags_filters_to_ready_gguf_models() {
+    let tmp = tempfile::tempdir().unwrap();
+    // Create a non-empty GGUF file only for qwen-7b
+    let qwen7b = mithril::engine::model_catalog::find_model("qwen-7b").unwrap();
+    std::fs::write(tmp.path().join(qwen7b.file_name), b"fake-gguf-data").unwrap();
+
+    let model_path = tmp.path().join("qwen2.5-coder-1.5b-instruct-q4_k_m.gguf");
+    let state = AppState {
+        model_manager: Arc::new(LazyModelManager::new(model_path, 60)),
+        tool_registry: Arc::new(tools::create_default_registry(tmp.path().to_str().unwrap())),
+        file_operator: Arc::new(FileOperator::new(tmp.path().to_str().unwrap())),
+        scan_operator: Arc::new(ScanOperator::new(tmp.path().to_str().unwrap())),
+        project_path: tmp.path().to_str().unwrap().to_string(),
+        active_downloads: Arc::new(Mutex::new(HashMap::new())),
+        api_token: None,
+        flow_config: None,
+        shutdown: CancellationToken::new(),
+    };
+    let app = mithril::api::server::build_app(state);
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let base = format!("http://{addr}");
+
+    let res = reqwest::get(format!("{base}/api/tags")).await.unwrap();
+    assert_eq!(res.status(), 200);
+    let body: serde_json::Value = res.json().await.unwrap();
+    let models = body["models"].as_array().unwrap();
+    let gguf_models: Vec<&serde_json::Value> = models
+        .iter()
+        .filter(|m| m["details"]["format"] == "gguf")
+        .collect();
+    // Only the downloaded qwen2:7b GGUF should be listed, not the 6 un-downloaded GGUFs
+    assert_eq!(gguf_models.len(), 1);
+    assert_eq!(gguf_models[0]["name"], "qwen2:7b");
+    assert_eq!(gguf_models[0]["model"], "qwen-7b");
+}
+
+#[tokio::test]
+async fn test_chat_qwen2_1_5b_does_not_return_404() {
+    let base = spawn_server().await;
+    let res = reqwest::Client::new()
+        .post(format!("{base}/api/chat"))
+        .json(&serde_json::json!({
+            "model": "qwen2:1.5b",
+            "messages": [{ "role": "user", "content": "hello" }],
+            "stream": false
+        }))
+        .send()
+        .await
+        .unwrap();
+    // Previously returned 404 ("model not found: qwen2:1.5b").
+    // Now "qwen2:1.5b" is recognized; without a downloaded GGUF it either falls back to a
+    // configured cloud provider or returns 500 (never 404).
+    assert_ne!(res.status(), 404, "qwen2:1.5b must not return 404 Not Found");
+}

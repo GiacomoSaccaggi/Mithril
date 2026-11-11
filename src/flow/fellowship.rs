@@ -1,15 +1,16 @@
-//! Fellowship — multi-agent orchestration config with GGUF entry classifier.
+//! Fellowship — multi-agent orchestration config with JEV decision controller.
 //!
 //! Architecture:
-//! - GGUF classifier routes entry requests to the appropriate first agent
+//! - JEV decision controller (`jevos-v4`) routes entry requests and acts as a fast zero-shot oracle
 //! - Agents communicate via NEXT:/TASK: protocol for free-flow delegation
-//! - GGUF acts as a cheap worker for trivial tasks (formatting, simple edits)
+//! - Intermediate `type: decision` JEV agents act as routers (`mode: route`), quality gates (`mode: gate`), or consultants (`mode: consult`) without ever speaking directly to the user
 //! - Rust enforces: can_call permissions, max_rounds, token_budget
 
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 /// Top-level fellowship configuration.
@@ -41,19 +42,32 @@ pub struct FellowshipConfig {
     pub token_tracking: TokenTrackingConfig,
 }
 
-/// GGUF controller configuration — local model for entry classification and cheap work.
+/// JEV decision controller configuration — fast model for entry classification and zero-shot decisions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ControllerConfig {
-    /// Provider to use (typically "local")
+    /// Provider to use (typically "local" or "jev")
     pub provider: String,
 
-    /// Model override (e.g. "qwen-1.5b")
+    /// Model override (defaults to "jevos-v4" when provider is "local")
     #[serde(default)]
     pub model: Option<String>,
 
     /// Number of recent rounds to include in context for agents
     #[serde(default = "default_context_window")]
     pub context_window: u32,
+}
+
+impl ControllerConfig {
+    /// Returns the effective model name, defaulting to `"jevos-v4"` for the `"local"` provider.
+    pub fn effective_model(&self) -> Option<&str> {
+        if let Some(ref m) = self.model {
+            Some(m.as_str())
+        } else if self.provider == "local" {
+            Some("jevos-v4")
+        } else {
+            None
+        }
+    }
 }
 
 fn default_max_rounds() -> u32 { 15 }
@@ -65,17 +79,25 @@ pub struct FellowshipAgent {
     /// Display name (used in NEXT: protocol)
     pub name: String,
 
-    /// Provider for internal agents ("gemini", "groq", "openai", "anthropic")
+    /// Provider for internal/decision agents ("gemini", "groq", "openai", "anthropic", "local", "jev")
     #[serde(default)]
     pub provider: Option<String>,
 
-    /// Model override
+    /// Model override (e.g. "jevos-v4" for decision agents)
     #[serde(default)]
     pub model: Option<String>,
 
-    /// Agent type: "provider" (API-based) or "external" (subprocess)
+    /// Agent type: "provider" (API-based), "external" (subprocess), or "decision" (intermediate JEV node)
     #[serde(rename = "type", default)]
     pub agent_type: AgentType,
+
+    /// Operational mode when `agent_type == AgentType::Decision` ("route", "gate", "consult")
+    #[serde(default)]
+    pub mode: Option<DecisionMode>,
+
+    /// Optional explicit decision choices (key -> criteria description) for `Decision` agents
+    #[serde(default)]
+    pub choices: Option<HashMap<String, String>>,
 
     /// Binary path for external agents (e.g. "kiro-cli")
     #[serde(default)]
@@ -85,14 +107,14 @@ pub struct FellowshipAgent {
     #[serde(default)]
     pub args: Option<Vec<String>>,
 
-    /// Description of what this agent does
+    /// Description of what this agent does (or decision criteria for `Decision` agents)
     pub role: String,
 
-    /// When this agent should be selected (used by GGUF classifier)
+    /// When this agent should be selected (used by JEV entry classifier)
     #[serde(default)]
     pub when: Option<String>,
 
-    /// Which agents this agent can call (+ "gguf" is always allowed)
+    /// Which agents this agent can call (+ "controller" / "jev" / "gguf" is always allowed)
     #[serde(default)]
     pub can_call: Vec<String>,
 
@@ -101,13 +123,56 @@ pub struct FellowshipAgent {
     pub tools: Option<Vec<String>>,
 }
 
-/// Agent type: internal (API provider) or external (subprocess CLI).
+/// Agent type: internal (API/local provider), external (subprocess CLI), or decision (JEV intermediate node).
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentType {
     #[default]
     Provider,
     External,
+    Decision,
+}
+
+/// Operational mode for `AgentType::Decision` intermediate agents.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum DecisionMode {
+    /// Dynamically routes to one of the agents in `can_call` via `decide_choice`.
+    Route,
+    /// Evaluates previous agent output ("pass" vs "retry"): forwards to `can_call[0]` on pass, or returns to caller on retry.
+    Gate,
+    /// Answers a decision/classification question and returns the verdict to the calling agent.
+    Consult,
+}
+
+impl FellowshipAgent {
+    /// Resolve the operational mode when `agent_type == AgentType::Decision`.
+    /// Defaults to `DecisionMode::Route` when `can_call` is non-empty, or `DecisionMode::Consult` when `can_call` is empty.
+    pub fn effective_decision_mode(&self) -> DecisionMode {
+        if let Some(ref mode) = self.mode {
+            return mode.clone();
+        }
+        if self.can_call.is_empty() {
+            DecisionMode::Consult
+        } else {
+            DecisionMode::Route
+        }
+    }
+
+    /// Returns true if this agent can be selected as the initial entry agent for a user request
+    /// (via `classify_entry` or `#agent` mention).
+    /// Internal `Decision` agents in `Consult` or `Gate` mode are strictly agent-to-agent and never entry-eligible.
+    /// A `Decision` agent in `Route` mode is only entry-eligible if it has `can_call` targets and an explicit `when` clause.
+    pub fn is_entry_eligible(&self) -> bool {
+        match self.agent_type {
+            AgentType::Provider | AgentType::External => true,
+            AgentType::Decision => {
+                self.effective_decision_mode() == DecisionMode::Route
+                    && !self.can_call.is_empty()
+                    && self.when.is_some()
+            }
+        }
+    }
 }
 
 /// Token tracking settings.
@@ -239,6 +304,8 @@ impl FellowshipConfig {
             provider,
             model,
             agent_type: AgentType::Provider,
+            mode: None,
+            choices: None,
             binary: None,
             args: None,
             role: if prompt.is_empty() { description.clone() } else { prompt.to_string() },
@@ -357,15 +424,16 @@ pub fn load_by_name(name: &str) -> Result<FellowshipConfig> {
 
 /// Generate a default fellowship.yaml content.
 pub fn default_template() -> String {
-    r#"# Mithril Fellowship — GGUF Entry Classifier + Agent Free-Flow
-# GGUF routes entry, agents collaborate via NEXT:/TASK: protocol
+    r#"# Mithril Fellowship — JEV Decision Controller + Agent Free-Flow
+# JEV (jevos-v4) routes entry and acts as a zero-shot decision oracle;
+# agents collaborate via NEXT:/TASK: protocol and intermediate `type: decision` nodes.
 
 name: "my-fellowship"
-description: "GGUF routes entry, agents collaborate freely"
+description: "JEV routes entry, agents collaborate freely"
 
 controller:
   provider: local
-  model: qwen-1.5b
+  model: jevos-v4
   context_window: 2
 
 max_rounds: 15
@@ -377,7 +445,7 @@ agents:
     model: gemini-3.6-flash
     role: "General worker. Codes, analyzes, explains, implements."
     when: "any coding, analysis, or implementation task"
-    can_call: ["reviewer", "gguf"]
+    can_call: ["reviewer", "controller"]
     tools: ["*"]
 
   - name: "reviewer"
@@ -387,6 +455,18 @@ agents:
     when: "explicit review request or complex architecture decisions"
     can_call: ["worker"]
     tools: ["read_psi", "grep_files", "git_diff"]
+
+  # Optional intermediate JEV decision agent (never speaks directly to the user):
+  # - name: "quality_gate"
+  #   type: decision
+  #   mode: gate
+  #   provider: local
+  #   model: jevos-v4
+  #   role: "Verify whether the implementation is complete and verified."
+  #   choices:
+  #     pass: "Implementation is complete and verified."
+  #     retry: "Implementation is incomplete or missing checks."
+  #   can_call: ["reviewer"]
 
 token_tracking:
   enabled: true
@@ -404,9 +484,9 @@ mod tests {
         let yaml = default_template();
         let config: FellowshipConfig = serde_yaml::from_str(&yaml).unwrap();
         assert_eq!(config.name, "my-fellowship");
-        assert_eq!(config.description, Some("GGUF routes entry, agents collaborate freely".to_string()));
+        assert_eq!(config.description, Some("JEV routes entry, agents collaborate freely".to_string()));
         assert_eq!(config.controller.provider, "local");
-        assert_eq!(config.controller.model, Some("qwen-1.5b".to_string()));
+        assert_eq!(config.controller.model, Some("jevos-v4".to_string()));
         assert_eq!(config.controller.context_window, 2);
         assert_eq!(config.max_rounds, 15);
         assert_eq!(config.token_budget, Some(50000));
@@ -419,7 +499,7 @@ mod tests {
     fn test_agent_can_call() {
         let yaml = default_template();
         let config: FellowshipConfig = serde_yaml::from_str(&yaml).unwrap();
-        assert_eq!(config.agents[0].can_call, vec!["reviewer", "gguf"]);
+        assert_eq!(config.agents[0].can_call, vec!["reviewer", "controller"]);
         assert_eq!(config.agents[1].can_call, vec!["worker"]);
     }
 
@@ -465,6 +545,7 @@ mod tests {
     fn test_agent_type_serialization() {
         assert_eq!(serde_yaml::to_string(&AgentType::Provider).unwrap().trim(), "provider");
         assert_eq!(serde_yaml::to_string(&AgentType::External).unwrap().trim(), "external");
+        assert_eq!(serde_yaml::to_string(&AgentType::Decision).unwrap().trim(), "decision");
     }
 
     #[test]
@@ -475,6 +556,7 @@ provider: local
         let config: ControllerConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.provider, "local");
         assert!(config.model.is_none());
+        assert_eq!(config.effective_model(), Some("jevos-v4"));
         assert_eq!(config.context_window, 2);
     }
 
@@ -669,6 +751,93 @@ role: "Test"
 "#;
         let agent: FellowshipAgent = serde_yaml::from_str(yaml).unwrap();
         assert!(agent.can_call.is_empty());
+    }
+
+    #[test]
+    fn test_decision_agent_modes_and_choices() {
+        let yaml = r#"
+name: "jev-workflow"
+controller:
+  provider: local
+  model: jevos-v4
+agents:
+  - name: "triage_router"
+    type: decision
+    mode: route
+    provider: local
+    model: jevos-v4
+    role: "Route the task to the right specialist"
+    can_call: ["coder", "reviewer"]
+
+  - name: "quality_gate"
+    type: decision
+    mode: gate
+    provider: local
+    model: jevos-v4
+    role: "Verify code completeness and tests"
+    choices:
+      pass: "All checks pass"
+      retry: "Missing tests or incomplete"
+    can_call: ["reviewer"]
+
+  - name: "risk_oracle"
+    type: decision
+    mode: consult
+    provider: jev
+    role: "Assess whether this change is high risk or low risk"
+    choices:
+      high: "Touches authentication or database migrations"
+      low: "Isolated UI or formatting change"
+"#;
+        let config: FellowshipConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.agents.len(), 3);
+
+        let router = &config.agents[0];
+        assert_eq!(router.agent_type, AgentType::Decision);
+        assert_eq!(router.mode, Some(DecisionMode::Route));
+        assert_eq!(router.effective_decision_mode(), DecisionMode::Route);
+        assert!(!router.is_entry_eligible()); // No `when` clause -> internal router
+
+        let gate = &config.agents[1];
+        assert_eq!(gate.agent_type, AgentType::Decision);
+        assert_eq!(gate.mode, Some(DecisionMode::Gate));
+        assert_eq!(gate.effective_decision_mode(), DecisionMode::Gate);
+        assert_eq!(gate.choices.as_ref().unwrap().get("pass").map(String::as_str), Some("All checks pass"));
+        assert!(!gate.is_entry_eligible());
+
+        let oracle = &config.agents[2];
+        assert_eq!(oracle.agent_type, AgentType::Decision);
+        assert_eq!(oracle.mode, Some(DecisionMode::Consult));
+        assert_eq!(oracle.effective_decision_mode(), DecisionMode::Consult);
+        assert!(!oracle.is_entry_eligible());
+    }
+
+    #[test]
+    fn test_effective_decision_mode_defaults() {
+        let route_implicit: FellowshipAgent = serde_yaml::from_str(r#"
+name: implicit_router
+type: decision
+role: "Routes between agents"
+can_call: ["a", "b"]
+"#).unwrap();
+        assert_eq!(route_implicit.effective_decision_mode(), DecisionMode::Route);
+
+        let consult_implicit: FellowshipAgent = serde_yaml::from_str(r#"
+name: implicit_oracle
+type: decision
+role: "Answers a yes/no question"
+"#).unwrap();
+        assert_eq!(consult_implicit.effective_decision_mode(), DecisionMode::Consult);
+
+        let entry_router: FellowshipAgent = serde_yaml::from_str(r#"
+name: entry_router
+type: decision
+mode: route
+role: "Entry triage router"
+when: "complex multi-step triage"
+can_call: ["a", "b"]
+"#).unwrap();
+        assert!(entry_router.is_entry_eligible());
     }
 }
 

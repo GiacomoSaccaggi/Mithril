@@ -20,6 +20,26 @@ impl GeminiProvider {
             client: reqwest::Client::new(),
         }
     }
+
+    /// Return ordered candidate embedding models to try, falling back when an experimental
+    /// or deprecated model (such as `gemini-embedding-exp-03-07`) returns HTTP 404.
+    pub fn embedding_model_candidates(&self) -> Vec<String> {
+        let mut candidates: Vec<String> = Vec::new();
+        let trimmed = self.model.trim().strip_prefix("models/").unwrap_or(self.model.trim());
+        if trimmed.contains("embedding") {
+            candidates.push(trimmed.to_string());
+        }
+        for fallback in [
+            "text-embedding-004",
+            "gemini-embedding-001",
+            "gemini-embedding-exp-03-07",
+        ] {
+            if !candidates.iter().any(|c| c == fallback) {
+                candidates.push(fallback.to_string());
+            }
+        }
+        candidates
+    }
 }
 
 #[derive(Serialize)]
@@ -196,22 +216,39 @@ impl ChatProvider for GeminiProvider {
     }
 
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        let mut embeddings = Vec::new();
+        let candidates = self.embedding_model_candidates();
+        let mut candidate_idx = 0;
+        let mut embeddings = Vec::with_capacity(texts.len());
+
         for text in texts {
-            let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-exp-03-07:embedContent?key={}",
-                self.api_key
-            );
             let body = serde_json::json!({
                 "content": { "parts": [{ "text": text }] }
             });
-            let response = self.client.post(&url).json(&body).send().await?;
-            if !response.status().is_success() {
+
+            let parsed: serde_json::Value = loop {
+                let embed_model = &candidates[candidate_idx];
+                let url = format!(
+                    "https://generativelanguage.googleapis.com/v1beta/models/{}:embedContent?key={}",
+                    embed_model, self.api_key
+                );
+                let response = self.client.post(&url).json(&body).send().await?;
                 let status = response.status();
+                if status.is_success() {
+                    break response.json().await?;
+                }
                 let err = response.text().await.unwrap_or_default();
+                if status == reqwest::StatusCode::NOT_FOUND && candidate_idx + 1 < candidates.len() {
+                    tracing::warn!(
+                        "Gemini embedding model '{}' returned 404; falling back to '{}'",
+                        embed_model,
+                        candidates[candidate_idx + 1]
+                    );
+                    candidate_idx += 1;
+                    continue;
+                }
                 anyhow::bail!("Gemini embed error ({}): {}", status, err);
-            }
-            let parsed: serde_json::Value = response.json().await?;
+            };
+
             let values = parsed["embedding"]["values"]
                 .as_array()
                 .ok_or_else(|| anyhow::anyhow!("Invalid embedding response"))?

@@ -12,6 +12,13 @@ pub struct ModelInfo {
     pub chat_template: ChatTemplate,
 }
 
+impl ModelInfo {
+    /// Canonical Ollama-style tag exposed by `/api/tags` (e.g. `"qwen2:1.5b"`, `"jev:882m"`).
+    pub fn ollama_tag(&self) -> String {
+        format!("{}:{}", self.family, self.parameter_size.to_lowercase())
+    }
+}
+
 pub const MODELS: &[ModelInfo] = &[
     ModelInfo {
         id: "qwen-1.5b",
@@ -87,25 +94,93 @@ pub const MODELS: &[ModelInfo] = &[
 
 /// Find a model by ID, with normalization for Ollama-style names.
 pub fn find_model(id: &str) -> Option<&'static ModelInfo> {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
     // Try exact match first
-    if let Some(m) = MODELS.iter().find(|m| m.id == id) {
+    if let Some(m) = MODELS.iter().find(|m| m.id == trimmed) {
         return Some(m);
     }
 
-    // Normalize Ollama-style names
-    let lower = id.to_lowercase();
-    let normalized = normalize_ollama_name(&lower);
-    MODELS.iter().find(|m| m.id == normalized)
+    // Strip optional `:latest` suffix and normalize case
+    let lower = trimmed.to_lowercase();
+    let stripped = lower.strip_suffix(":latest").unwrap_or(&lower);
+
+    // Match against catalog ID or canonical Ollama tag (`family:parameter_size`)
+    if let Some(m) = MODELS
+        .iter()
+        .find(|m| m.id == stripped || m.ollama_tag() == stripped)
+    {
+        return Some(m);
+    }
+
+    // Normalize Ollama-style aliases
+    let normalized = normalize_ollama_name(stripped);
+    if !normalized.is_empty() {
+        return MODELS.iter().find(|m| m.id == normalized);
+    }
+
+    None
 }
 
 fn normalize_ollama_name(name: &str) -> &'static str {
     match name {
-        "qwen2.5-coder:1.5b" | "qwen2.5-coder-1.5b" | "qwen:1.5b" => "qwen-1.5b",
-        "qwen2.5-coder:7b" | "qwen2.5-coder-7b" | "qwen:7b" => "qwen-7b",
-        "llama3.1:8b" | "llama3.1-8b" | "llama:8b" | "llama3:8b" => "llama-8b",
-        "deepseek-coder:6.7b" | "deepseek-coder-6.7b" => "deepseek-6.7b",
-        "phi3.5" | "phi3.5:3.8b" | "phi-3.5:3.8b" | "phi3:3.8b" => "phi-3.5",
-        "jevos-v4" | "jevos:v4" | "jev" | "jev:latest" | "jevos" | "jevos:latest" | "jevos-v4-q4_k_m" => "jevos-v4",
+        "qwen2:1.5b"
+        | "qwen2-1.5b"
+        | "qwen2.5:1.5b"
+        | "qwen2.5-1.5b"
+        | "qwen2.5-coder:1.5b"
+        | "qwen2.5-coder-1.5b"
+        | "qwen:1.5b"
+        | "qwen"
+        | "qwen2"
+        | "qwen2.5"
+        | "qwen2.5-coder" => "qwen-1.5b",
+        "qwen2:7b"
+        | "qwen2-7b"
+        | "qwen2.5:7b"
+        | "qwen2.5-7b"
+        | "qwen2.5-coder:7b"
+        | "qwen2.5-coder-7b"
+        | "qwen:7b" => "qwen-7b",
+        "qwen2:14b"
+        | "qwen2-14b"
+        | "qwen2.5:14b"
+        | "qwen2.5-14b"
+        | "qwen2.5-coder:14b"
+        | "qwen2.5-coder-14b"
+        | "qwen:14b" => "qwen-14b",
+        "llama3.1:8b"
+        | "llama3.1-8b"
+        | "llama:8b"
+        | "llama3:8b"
+        | "llama3-8b"
+        | "llama-3.1-8b"
+        | "llama"
+        | "llama3"
+        | "llama3.1" => "llama-8b",
+        "deepseek:6.7b"
+        | "deepseek-6.7b"
+        | "deepseek-coder:6.7b"
+        | "deepseek-coder-6.7b"
+        | "deepseek-coder" => "deepseek-6.7b",
+        "phi3.5"
+        | "phi-3.5"
+        | "phi3.5:3.8b"
+        | "phi-3.5:3.8b"
+        | "phi3:3.8b"
+        | "phi-3:3.8b"
+        | "phi3"
+        | "phi" => "phi-3.5",
+        "jevos-v4"
+        | "jevos:v4"
+        | "jev:882m"
+        | "jev-882m"
+        | "jev"
+        | "jevos"
+        | "jevos-v4-q4_k_m" => "jevos-v4",
         _ => "",
     }
 }
@@ -118,6 +193,7 @@ mod tests {
     fn test_find_by_exact_id() {
         assert!(find_model("qwen-1.5b").is_some());
         assert!(find_model("qwen-7b").is_some());
+        assert!(find_model("qwen-14b").is_some());
         assert!(find_model("llama-8b").is_some());
         assert!(find_model("deepseek-6.7b").is_some());
         assert!(find_model("phi-3.5").is_some());
@@ -138,7 +214,35 @@ mod tests {
     }
 
     #[test]
+    fn test_find_all_api_tags_and_projectcompass_names() {
+        for model in MODELS {
+            let tag = model.ollama_tag();
+            let resolved = find_model(&tag).expect(&format!("tag {} should resolve", tag));
+            assert_eq!(resolved.id, model.id);
+
+            let tag_latest = format!("{}:latest", tag);
+            let resolved_latest =
+                find_model(&tag_latest).expect(&format!("tag {} should resolve", tag_latest));
+            assert_eq!(resolved_latest.id, model.id);
+
+            let id_latest = format!("{}:latest", model.id);
+            let resolved_id_latest =
+                find_model(&id_latest).expect(&format!("id {} should resolve", id_latest));
+            assert_eq!(resolved_id_latest.id, model.id);
+        }
+
+        assert_eq!(find_model("qwen2:1.5b").unwrap().id, "qwen-1.5b");
+        assert_eq!(find_model("qwen2:7b").unwrap().id, "qwen-7b");
+        assert_eq!(find_model("qwen2:14b").unwrap().id, "qwen-14b");
+        assert_eq!(find_model("deepseek:6.7b").unwrap().id, "deepseek-6.7b");
+        assert_eq!(find_model("jev:882m").unwrap().id, "jevos-v4");
+        assert_eq!(find_model("llama:8b").unwrap().id, "llama-8b");
+        assert_eq!(find_model("phi3:3.8b").unwrap().id, "phi-3.5");
+    }
+
+    #[test]
     fn test_unknown_model() {
         assert!(find_model("nonexistent-model").is_none());
+        assert!(find_model("nonexistent-model-xyz").is_none());
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "mithril"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "Multi-model orchestration backend. Fellowship-based agent routing with Ollama/OpenAI/MCP API compatibility."
 license = "MIT"

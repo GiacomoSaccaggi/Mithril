@@ -23,20 +23,43 @@ Start message with `#reviewer` to skip classification and route directly.
 name: "my-team"
 controller:
   provider: local       # or provider: jev
-  model: jevos-v4       # Dedicated zero-shot decision router (~620MB)
+  model: jevos-v4       # Dedicated zero-shot decision router + oracle (~620MB)
+  context_window: 2
 agents:
   - name: coder
     provider: gemini
+    model: gemini-3.6-flash
+    role: "Writes and modifies code."
     when: "coding tasks"
+    can_call: ["quality_gate", "controller"]
     tools: ["*"]
+
+  - name: quality_gate
+    type: decision      # Internal JEV decision agent (never answers the user directly)
+    mode: gate          # route | gate | consult
+    provider: local
+    model: jevos-v4
+    role: "Verify whether the implementation is complete and includes tests."
+    choices:
+      pass: "Implementation is complete and verified."
+      retry: "Implementation is incomplete or missing tests."
+    can_call: ["reviewer"]
+
+  - name: reviewer
+    provider: gemini
+    model: gemini-2.5-pro
+    role: "Senior reviewer."
+    when: "explicit review request"
+    can_call: ["coder"]
+    tools: ["read_psi", "grep_files", "git_diff"]
 ```
 
 ## Files
 
 - `agent_loop.rs` — Shared agentic loop — used by both interactive chat and headless exec.
 - `config.rs` — Flow configuration — parsed from `.mithril-flow.yaml`.
-- `fellowship.rs` — Fellowship — multi-agent orchestration config with GGUF entry classifier.
+- `fellowship.rs` — Fellowship — multi-agent orchestration config with JEV decision controller and `type: decision` intermediate agents.
 - `mod.rs` — Multi-agent flow system.
-- `orchestrator.rs` — Orchestrator — GGUF entry classifier + agent free-flow + GGUF worker.
+- `orchestrator.rs` — Orchestrator — JEV decision controller + agent free-flow + intermediate decision agents (`route`, `gate`, `consult`).
 - `runner.rs` — FlowRunner — executes the Planner→Tools loop.
 - `tokens.rs` — Token tracking — count tokens per provider call, accumulate per-agent.

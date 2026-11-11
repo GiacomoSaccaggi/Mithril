@@ -3,7 +3,7 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::flow::fellowship::{self, FellowshipConfig, AgentType};
+use crate::flow::fellowship::{self, FellowshipConfig, AgentType, DecisionMode};
 
 pub async fn run(action: &str) -> Result<()> {
     match action {
@@ -34,10 +34,10 @@ async fn status() -> Result<()> {
             }
             println!();
 
-            // Controller (GGUF entry classifier + worker)
-            println!("{}", "Controller (GGUF):".bold());
+            // Controller (JEV decision router + zero-shot oracle)
+            println!("{}", "Controller (JEV / Decision):".bold());
             println!("  Provider: {}", config.controller.provider.green());
-            println!("  Model:    {}", config.controller.model.as_deref().unwrap_or("(default)").green());
+            println!("  Model:    {}", config.controller.effective_model().unwrap_or("(default)").green());
             println!("  Context:  {} rounds", config.controller.context_window);
             println!();
 
@@ -59,6 +59,14 @@ async fn status() -> Result<()> {
                 let type_badge = match agent.agent_type {
                     AgentType::Provider => "API".blue(),
                     AgentType::External => "CLI".yellow(),
+                    AgentType::Decision => {
+                        let mode_label = match agent.effective_decision_mode() {
+                            DecisionMode::Route => "DECISION:ROUTE",
+                            DecisionMode::Gate => "DECISION:GATE",
+                            DecisionMode::Consult => "DECISION:CONSULT",
+                        };
+                        mode_label.magenta()
+                    }
                 };
 
                 // Agent header
@@ -79,6 +87,20 @@ async fn status() -> Result<()> {
                         let prov = agent.provider.as_deref().unwrap_or("?");
                         let model = agent.model.as_deref().unwrap_or("(default)");
                         println!("     {} {} / {}", "Model:".dimmed(), prov.green(), model.cyan());
+                    }
+                    AgentType::Decision => {
+                        let prov = agent.provider.as_deref().unwrap_or(&config.controller.provider);
+                        let model = agent.model.as_deref()
+                            .or_else(|| if prov == "local" { config.controller.effective_model() } else { None })
+                            .unwrap_or("(default)");
+                        println!("     {} {} / {} {}", "Model:".dimmed(), prov.green(), model.cyan(), "(internal agent-to-agent only)".dimmed());
+                        if let Some(ref choices) = agent.choices {
+                            if !choices.is_empty() {
+                                let mut keys: Vec<&str> = choices.keys().map(String::as_str).collect();
+                                keys.sort_unstable();
+                                println!("     {} {}", "Choices:".dimmed(), keys.join(", ").magenta());
+                            }
+                        }
                     }
                     AgentType::External => {
                         let bin = agent.binary.as_deref().unwrap_or("?");
@@ -178,9 +200,10 @@ async fn test_agents() -> Result<()> {
     println!();
 
     // Test controller
-    print!("  Controller ({})... ", config.controller.provider);
+    let ctrl_model = config.controller.effective_model();
+    print!("  Controller ({}/{})... ", config.controller.provider, ctrl_model.unwrap_or("default"));
     let mithril_config = crate::config::MithrilConfig::load()?;
-    match crate::providers::create_provider(&config.controller.provider, &mithril_config) {
+    match crate::providers::create_provider_with_model(&config.controller.provider, ctrl_model, &mithril_config) {
         Ok(p) => {
             match p.chat(&[crate::providers::ChatMessage::user("hello")]).await {
                 Ok(_) => println!("{}", "✓".green()),
@@ -194,13 +217,21 @@ async fn test_agents() -> Result<()> {
     for agent in &config.agents {
         print!("  {} ({})... ", agent.name, match &agent.agent_type {
             AgentType::Provider => agent.provider.as_deref().unwrap_or("?"),
+            AgentType::Decision => agent.provider.as_deref().unwrap_or(&config.controller.provider),
             AgentType::External => agent.binary.as_deref().unwrap_or("?"),
         });
 
         match &agent.agent_type {
-            AgentType::Provider => {
-                let prov = agent.provider.as_deref().unwrap_or("unknown");
-                match crate::providers::create_provider(prov, &mithril_config) {
+            AgentType::Provider | AgentType::Decision => {
+                let prov = agent.provider.as_deref().unwrap_or(&config.controller.provider);
+                let model = agent.model.as_deref().or_else(|| {
+                    if agent.agent_type == AgentType::Decision && prov == "local" {
+                        config.controller.effective_model()
+                    } else {
+                        None
+                    }
+                });
+                match crate::providers::create_provider_with_model(prov, model, &mithril_config) {
                     Ok(p) => {
                         match p.chat(&[crate::providers::ChatMessage::user("hello")]).await {
                             Ok(_) => println!("{}", "✓".green()),

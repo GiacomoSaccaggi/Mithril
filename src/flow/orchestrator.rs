@@ -1,11 +1,12 @@
-//! Orchestrator — GGUF entry classifier + agent free-flow + GGUF worker.
+//! Orchestrator — JEV decision controller + agent free-flow + intermediate decision agents.
 //!
 //! # Flow
 //!
-//! 1. GGUF classifies user message → picks first agent
+//! 1. JEV controller (`jevos-v4`) classifies user message → picks first entry-eligible agent
 //! 2. Agents execute and communicate via NEXT:/TASK: protocol
-//! 3. Agents can delegate trivial tasks to GGUF (free local worker)
-//! 4. Rust enforces: can_call permissions, max_rounds, token_budget
+//! 3. Agents can query the controller (`NEXT: controller` / `NEXT: jev`) as a fast zero-shot decision oracle
+//! 4. Intermediate `type: decision` agents route (`mode: route`), gate (`mode: gate`), or consult (`mode: consult`) without ever speaking directly to the user
+//! 5. Rust enforces: can_call permissions, max_rounds, token_budget
 //!
 //! ```mermaid
 //! sequenceDiagram
@@ -53,8 +54,19 @@ pub enum TraceEntry {
     ToolCall { name: String, success: bool, preview: String },
     Delegation { from: String, to: String, task_preview: String },
     GgufCall { task_preview: String },
+    DecisionStep { agent: String, mode: String, outcome: String },
     Done { agent: String },
     BudgetWarning { used: u64, limit: u64 },
+}
+
+/// Outcome of executing an intermediate `AgentType::Decision` node.
+/// Guarantees that a Decision agent always transitions to another agent and never terminates the loop.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DecisionTransition {
+    pub next_agent: String,
+    pub next_task: String,
+    pub mode: String,
+    pub verdict: String,
 }
 
 /// Result of orchestrator processing a request.
@@ -137,15 +149,11 @@ impl Orchestrator {
     }
 
     async fn classify_entry(&mut self, user_message: &str) -> Result<String> {
-        let mut candidates = std::collections::HashMap::new();
-        for agent in &self.config.agents {
-            let desc = agent.when.as_deref().unwrap_or(&agent.role);
-            candidates.insert(agent.name.clone(), desc.to_string());
-        }
+        let candidates = self.build_entry_candidates();
 
         let controller = providers::create_provider_with_model(
             &self.config.controller.provider,
-            self.config.controller.model.as_deref(),
+            self.config.controller.effective_model(),
             &self.mithril_config,
         )?;
 
@@ -156,16 +164,42 @@ impl Orchestrator {
         ).await?;
 
         let usage = TokenUsage::estimate(user_message, &response);
-        let provider_name = if self.config.controller.provider == "local" { "gguf" } else { &self.config.controller.provider };
-        self.tokens.record(provider_name, &usage);
+        self.tokens.record("controller", &usage);
 
-        // Find which agent name appears in the response
+        Ok(self.match_entry_candidate(&response))
+    }
+
+    /// Build the map of candidate agents eligible for initial user entry routing.
+    /// Excludes internal `Decision` agents (`Consult`, `Gate`, and `Route` without `when`).
+    fn build_entry_candidates(&self) -> std::collections::HashMap<String, String> {
+        let mut candidates = std::collections::HashMap::new();
+        for agent in self.config.agents.iter().filter(|a| a.is_entry_eligible()) {
+            let desc = agent.when.as_deref().unwrap_or(&agent.role);
+            candidates.insert(agent.name.clone(), desc.to_string());
+        }
+        if candidates.is_empty() {
+            for agent in &self.config.agents {
+                let desc = agent.when.as_deref().unwrap_or(&agent.role);
+                candidates.insert(agent.name.clone(), desc.to_string());
+            }
+        }
+        candidates
+    }
+
+    /// Match the controller's response to an entry-eligible agent, falling back to the first eligible agent.
+    fn match_entry_candidate(&self, response: &str) -> String {
         let resp_lower = response.trim().to_lowercase();
-        let matched = self.config.agents.iter()
-            .find(|a| resp_lower.contains(&a.name.to_lowercase()))
-            .map(|a| a.name.clone());
+        let eligible: Vec<&FellowshipAgent> = self.config.agents.iter()
+            .filter(|a| a.is_entry_eligible())
+            .collect();
 
-        Ok(matched.unwrap_or_else(|| self.config.agents[0].name.clone()))
+        if let Some(matched) = eligible.iter().find(|a| resp_lower.contains(&a.name.to_lowercase())) {
+            return matched.name.clone();
+        }
+        if let Some(first) = eligible.first() {
+            return first.name.clone();
+        }
+        self.config.agents.first().map(|a| a.name.clone()).unwrap_or_default()
     }
 
     /// Query the Palantír BM25 index for relevant files based on user message.
@@ -195,7 +229,7 @@ impl Orchestrator {
     }
 
     /// Check if user message starts with #agentname and extract the agent name.
-    /// Returns Some(agent_name) if a valid agent is mentioned, None otherwise.
+    /// Returns Some(agent_name) if a valid entry-eligible agent is mentioned, None otherwise.
     fn extract_agent_mention(&self, message: &str) -> Option<String> {
         let trimmed = message.trim();
         if !trimmed.starts_with('#') {
@@ -205,8 +239,9 @@ impl Orchestrator {
         let mention = trimmed[1..].split_whitespace().next()?;
         let mention_lower = mention.to_lowercase();
 
-        // Check if it matches any configured agent
+        // Check if it matches any entry-eligible configured agent
         self.config.agents.iter()
+            .filter(|a| a.is_entry_eligible())
             .find(|a| a.name.to_lowercase() == mention_lower)
             .map(|a| a.name.clone())
     }
@@ -214,11 +249,11 @@ impl Orchestrator {
     async fn run_agent_loop(&mut self, first_agent: &str, initial_task: &str) -> Result<String> {
         let mut current_agent_name = first_agent.to_string();
         let mut current_task = initial_task.to_string();
+        let mut previous_agent_name: Option<String> = None;
 
         loop {
             // Safety: max_rounds
             if self.rounds >= self.config.max_rounds {
-    
                 return Ok(format!("[Max rounds reached after {} iterations]", self.rounds));
             }
 
@@ -239,9 +274,41 @@ impl Orchestrator {
                 self.agents_involved.push(current_agent_name.clone());
             }
 
-            // Execute
-            let result = if current_agent_name == "gguf" {
-                self.execute_gguf(&current_task).await?
+            // Check if current agent is an intermediate Decision agent (never user-facing)
+            if !is_controller_target(&current_agent_name) {
+                let agent = self.config.get_agent(&current_agent_name)
+                    .ok_or_else(|| anyhow!("Agent '{}' not found", current_agent_name))?
+                    .clone();
+
+                if agent.agent_type == AgentType::Decision {
+                    let transition = self.execute_decision_agent(
+                        &agent,
+                        &current_task,
+                        previous_agent_name.as_deref(),
+                    ).await?;
+
+                    let outcome = format!("{} -> {}", transition.verdict, transition.next_agent);
+                    self.trace.push(TraceEntry::DecisionStep {
+                        agent: agent.name.clone(),
+                        mode: transition.mode.clone(),
+                        outcome: outcome.clone(),
+                    });
+
+                    self.context_history.push(RoundEntry {
+                        agent_name: agent.name.clone(),
+                        task: if current_task.len() > 200 { format!("{}...", &current_task[..200]) } else { current_task.clone() },
+                        response_summary: format!("[decision:{}] {}", transition.mode, outcome),
+                    });
+
+                    current_agent_name = transition.next_agent;
+                    current_task = transition.next_task;
+                    continue;
+                }
+            }
+
+            // Execute standard agent or controller oracle
+            let result = if is_controller_target(&current_agent_name) {
+                self.execute_controller_decision(&current_task).await?
             } else {
                 let agent = self.config.get_agent(&current_agent_name)
                     .ok_or_else(|| anyhow!("Agent '{}' not found", current_agent_name))?
@@ -267,8 +334,8 @@ impl Orchestrator {
                     return Ok(response);
                 }
                 Directive::CallAgent { name, task } => {
-                    // Permission check
-                    if name != "gguf" {
+                    // Permission check (controller / jev / gguf oracle is always allowed)
+                    if !is_controller_target(&name) {
                         let caller = self.config.get_agent(&current_agent_name);
                         if let Some(caller) = caller {
                             if !caller.can_call.contains(&name) {
@@ -283,22 +350,23 @@ impl Orchestrator {
 
                     let task_preview = if task.len() > 60 { format!("{}...", &task[..60]) } else { task.clone() };
 
-                    if name == "gguf" {
-                        // GGUF worker: execute and return result to CALLING agent
+                    if is_controller_target(&name) {
+                        // Controller / JEV decision oracle: execute zero-shot decision and return verdict to CALLING agent
                         self.trace.push(TraceEntry::GgufCall { task_preview: task_preview.clone() });
 
-                        let gguf_result = self.execute_gguf(&task).await?;
-                        // Feed back to same agent with gguf result as new task
-                        current_task = format!("Result from gguf: {}\n\nContinue your previous task.", gguf_result);
+                        let verdict = self.execute_controller_decision(&task).await?;
+                        // Feed back to same agent with controller verdict as new task
+                        current_task = format!("Result from {}: {}\n\nContinue your previous task.", name, verdict);
                         // Don't change current_agent_name — stays with the caller
                     } else {
-                        // Agent-to-agent delegation
+                        // Agent-to-agent delegation (including delegating to a Decision agent)
                         self.trace.push(TraceEntry::Delegation {
                             from: current_agent_name.clone(),
                             to: name.clone(),
                             task_preview: task_preview.clone(),
                         });
 
+                        previous_agent_name = Some(current_agent_name);
                         current_agent_name = name;
                         current_task = task;
                     }
@@ -315,9 +383,9 @@ impl Orchestrator {
 
     async fn execute_agent(&mut self, agent: &FellowshipAgent, task: &str) -> Result<String> {
         let provider_info = match agent.agent_type {
-            AgentType::Provider => format!("{}/{}", 
-                agent.provider.as_deref().unwrap_or("?"),
-                agent.model.as_deref().unwrap_or("default")),
+            AgentType::Provider | AgentType::Decision => format!("{}/{}", 
+                agent.provider.as_deref().unwrap_or("local"),
+                agent.model.as_deref().unwrap_or("jevos-v4")),
             AgentType::External => agent.binary.as_deref().unwrap_or("?").to_string(),
         };
 
@@ -332,7 +400,7 @@ impl Orchestrator {
 
         match agent.agent_type {
             AgentType::External => self.execute_external(agent, task).await,
-            AgentType::Provider => self.execute_provider_agent(agent, task).await,
+            AgentType::Provider | AgentType::Decision => self.execute_provider_agent(agent, task).await,
         }
     }
 
@@ -442,48 +510,279 @@ impl Orchestrator {
         Ok(stdout)
     }
 
-    async fn execute_gguf(&mut self, task: &str) -> Result<String> {
-        let controller = providers::create_provider_with_model(
-            &self.config.controller.provider,
-            self.config.controller.model.as_deref(),
+    /// Execute an intermediate `AgentType::Decision` agent (`Route`, `Gate`, or `Consult`).
+    /// Never returns a direct response to the user; always computes a `DecisionTransition`
+    /// to either a target in `can_call` or back to the calling agent.
+    async fn execute_decision_agent(
+        &mut self,
+        agent: &FellowshipAgent,
+        task: &str,
+        previous_agent: Option<&str>,
+    ) -> Result<DecisionTransition> {
+        let provider_name = agent.provider.as_deref()
+            .unwrap_or(&self.config.controller.provider);
+        let model_override = agent.model.as_deref().or_else(|| {
+            if provider_name == "local" {
+                self.config.controller.effective_model()
+            } else {
+                None
+            }
+        });
+
+        let provider_info = format!("{}/{} [decision]", provider_name, model_override.unwrap_or("default"));
+        self.trace.push(TraceEntry::AgentStart {
+            agent: agent.name.clone(),
+            provider: provider_info.clone(),
+        });
+
+        if self.trace_mode == TraceMode::Full {
+            eprintln!("  {} {} ({})", "▶".dimmed(), agent.name.cyan(), provider_info.dimmed());
+        }
+
+        let provider = providers::create_provider_with_model(
+            provider_name,
+            model_override,
             &self.mithril_config,
         )?;
 
-        // GGUF worker has access to tools for simple file operations
-        let cwd = std::env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| ".".to_string());
-        let registry = crate::tools::create_default_registry(&cwd);
-        let tool_defs = if self.plan_mode {
-            const PLAN_TOOLS: &[&str] = &[
-                "read_psi", "list_files", "grep_files", "find_file", "file_stats",
-                "git_status", "git_log", "git_diff", "git_blame", "git_branch",
-                "search_symbols", "document_outline", "web_search", "fetch_page", "lore_read",
-            ];
-            flow::build_tool_defs(&registry).into_iter()
-                .filter(|t| PLAN_TOOLS.contains(&t.name.as_str()))
-                .collect()
+        let context_window = self.config.controller.context_window as usize;
+        let recent: Vec<String> = self.context_history.iter()
+            .rev().take(context_window).rev()
+            .map(|r| format!("[{}]: {}", r.agent_name, r.response_summary))
+            .collect();
+
+        let state = if recent.is_empty() {
+            task.to_string()
         } else {
-            flow::build_tool_defs(&registry)
+            format!("{}\n\nCurrent input:\n{}", recent.join("\n"), task)
         };
 
-        let mut messages = vec![
-            ChatMessage::system("You are a local assistant. Complete the task concisely. You have access to file tools."),
-            ChatMessage::user(task),
-        ];
+        // Determine effective mode (fall back to Consult if Route/Gate has empty can_call)
+        let effective_mode = match agent.effective_decision_mode() {
+            DecisionMode::Route | DecisionMode::Gate if agent.can_call.is_empty() => DecisionMode::Consult,
+            mode => mode,
+        };
 
-        let result = agent_loop::run_agentic_loop(
-            controller.as_ref(),
-            &mut messages,
-            &tool_defs,
-            &registry,
-            5, // max 5 iterations for GGUF (it's for simple tasks)
-            TraceMode::Silent,
-        ).await?;
+        let raw_verdict = match effective_mode {
+            DecisionMode::Route => {
+                let candidates = self.build_route_candidates(agent);
+                provider.decide_choice(&agent.role, &state, &candidates).await?
+            }
+            DecisionMode::Gate => {
+                let criteria = Self::build_gate_criteria(agent);
+                provider.decide_choice(&agent.role, &state, &criteria).await?
+            }
+            DecisionMode::Consult => {
+                if let Some(ref choices) = agent.choices {
+                    if !choices.is_empty() {
+                        provider.decide_choice(&agent.role, &state, choices).await?
+                    } else {
+                        let messages = vec![
+                            ChatMessage::system(format!("{}\n\n{}", agent.role, recent.join("\n")).trim().to_string()),
+                            ChatMessage::user(task),
+                        ];
+                        provider.chat(&messages).await?
+                    }
+                } else if let Some((question, inline_choices)) = parse_inline_choices(task) {
+                    provider.decide_choice(&question, &state, &inline_choices).await?
+                } else {
+                    let messages = vec![
+                        ChatMessage::system(format!("{}\n\n{}", agent.role, recent.join("\n")).trim().to_string()),
+                        ChatMessage::user(task),
+                    ];
+                    provider.chat(&messages).await?
+                }
+            }
+        };
 
-        let usage = TokenUsage::estimate(task, &result.response);
-        self.tokens.record("gguf", &usage);
-        Ok(result.response)
+        let usage = TokenUsage::estimate(&state, &raw_verdict);
+        self.tokens.record(&agent.name, &usage);
+
+        Ok(self.resolve_decision_transition(agent, task, &raw_verdict, previous_agent))
+    }
+
+    /// Build the candidate map for a `DecisionMode::Route` agent from its `can_call` list and optional `choices`.
+    pub fn build_route_candidates(&self, agent: &FellowshipAgent) -> std::collections::HashMap<String, String> {
+        let mut candidates = std::collections::HashMap::new();
+        for target_name in &agent.can_call {
+            if let Some(desc) = agent.choices.as_ref().and_then(|c| c.get(target_name)) {
+                candidates.insert(target_name.clone(), desc.clone());
+            } else if let Some(target_agent) = self.config.get_agent(target_name) {
+                let desc = target_agent.when.as_deref().unwrap_or(&target_agent.role);
+                candidates.insert(target_name.clone(), desc.to_string());
+            } else {
+                candidates.insert(target_name.clone(), target_name.clone());
+            }
+        }
+        candidates
+    }
+
+    /// Build the pass/retry criteria map for a `DecisionMode::Gate` agent.
+    pub fn build_gate_criteria(agent: &FellowshipAgent) -> std::collections::HashMap<String, String> {
+        if let Some(ref choices) = agent.choices {
+            if !choices.is_empty() {
+                return choices.clone();
+            }
+        }
+        let mut criteria = std::collections::HashMap::new();
+        criteria.insert(
+            "pass".to_string(),
+            "Output satisfies criteria and is ready to proceed".to_string(),
+        );
+        criteria.insert(
+            "retry".to_string(),
+            "Output needs revision, is incomplete, or fails criteria".to_string(),
+        );
+        criteria
+    }
+
+    /// Pure deterministic resolution of a `Decision` agent's transition given its raw JEV verdict.
+    /// Guarantees that `Decision` agents never terminate the loop to answer the user directly.
+    pub fn resolve_decision_transition(
+        &self,
+        agent: &FellowshipAgent,
+        task: &str,
+        raw_verdict: &str,
+        previous_agent: Option<&str>,
+    ) -> DecisionTransition {
+        let verdict = raw_verdict.trim().to_string();
+        let verdict_lower = verdict.to_lowercase();
+
+        let fallback_caller = || -> String {
+            if let Some(prev) = previous_agent {
+                if !prev.is_empty() {
+                    return prev.to_string();
+                }
+            }
+            self.config.agents.iter()
+                .find(|a| a.agent_type != AgentType::Decision)
+                .or_else(|| self.config.agents.first())
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| "worker".to_string())
+        };
+
+        let effective_mode = match agent.effective_decision_mode() {
+            DecisionMode::Route | DecisionMode::Gate if agent.can_call.is_empty() => DecisionMode::Consult,
+            mode => mode,
+        };
+
+        match effective_mode {
+            DecisionMode::Route => {
+                let chosen = agent.can_call.iter()
+                    .find(|target| verdict_lower.contains(&target.to_lowercase()))
+                    .cloned()
+                    .unwrap_or_else(|| agent.can_call[0].clone());
+
+                DecisionTransition {
+                    next_agent: chosen,
+                    next_task: task.to_string(),
+                    mode: "route".to_string(),
+                    verdict,
+                }
+            }
+            DecisionMode::Gate => {
+                // Check if verdict explicitly names a target agent in can_call
+                let direct_target = agent.can_call.iter()
+                    .find(|target| verdict_lower == target.to_lowercase())
+                    .cloned();
+
+                let is_rejected = verdict_lower.contains("retry")
+                    || verdict_lower.contains("reject")
+                    || verdict_lower.contains("fail")
+                    || verdict_lower.contains("no");
+
+                let is_passed = direct_target.is_some()
+                    || (!is_rejected && (
+                        verdict_lower.contains("pass")
+                        || verdict_lower.contains("approve")
+                        || verdict_lower.contains("accept")
+                        || verdict_lower.contains("ok")
+                        || verdict_lower.contains("yes")
+                    ));
+
+                if is_passed {
+                    let next_agent = direct_target.unwrap_or_else(|| agent.can_call[0].clone());
+                    DecisionTransition {
+                        next_agent,
+                        next_task: task.to_string(),
+                        mode: "gate".to_string(),
+                        verdict: "pass".to_string(),
+                    }
+                } else {
+                    let caller = fallback_caller();
+                    let next_task = format!(
+                        "Gate '{}' rejected output (verdict: {}). Criteria: {}\n\nPlease revise and try again.",
+                        agent.name, verdict, agent.role
+                    );
+                    DecisionTransition {
+                        next_agent: caller,
+                        next_task,
+                        mode: "gate".to_string(),
+                        verdict: if verdict.is_empty() { "retry".to_string() } else { verdict },
+                    }
+                }
+            }
+            DecisionMode::Consult => {
+                let caller = fallback_caller();
+                let next_task = format!(
+                    "Result from {}: {}\n\nContinue your task.",
+                    agent.name, verdict
+                );
+                DecisionTransition {
+                    next_agent: caller,
+                    next_task,
+                    mode: "consult".to_string(),
+                    verdict,
+                }
+            }
+        }
+    }
+
+    /// Execute a zero-shot decision using the Fellowship controller (JEV model).
+    /// Supports both structured choice decisions (when `CHOICES:` / `OPTIONS:` are provided in `task`)
+    /// and direct `<evidence>` zero-shot decisions.
+    async fn execute_controller_decision(&mut self, task: &str) -> Result<String> {
+        let controller = providers::create_provider_with_model(
+            &self.config.controller.provider,
+            self.config.controller.effective_model(),
+            &self.mithril_config,
+        )?;
+
+        let context_window = self.config.controller.context_window as usize;
+        let recent_evidence: String = self.context_history.iter()
+            .rev().take(context_window).rev()
+            .map(|r| format!("[{}]: {}", r.agent_name, r.response_summary))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let response = if let Some((question, choices)) = parse_inline_choices(task) {
+            let state = if recent_evidence.is_empty() {
+                question.clone()
+            } else {
+                format!("{}\n\n{}", recent_evidence, question)
+            };
+            controller.decide_choice(&question, &state, &choices).await?
+        } else {
+            let evidence = if recent_evidence.is_empty() {
+                "Evaluate the request and provide a direct, concise decision verdict.".to_string()
+            } else {
+                recent_evidence
+            };
+            let messages = vec![
+                ChatMessage::system(evidence),
+                ChatMessage::user(task),
+            ];
+            controller.chat(&messages).await?
+        };
+
+        let usage = TokenUsage::estimate(task, &response);
+        self.tokens.record("controller", &usage);
+        Ok(response.trim().to_string())
+    }
+
+    #[allow(dead_code)]
+    async fn execute_gguf(&mut self, task: &str) -> Result<String> {
+        self.execute_controller_decision(task).await
     }
 
     #[allow(dead_code)]
@@ -565,17 +864,70 @@ fn parse_agent_directive(output: &str) -> Directive {
     }
 }
 
+// ── Controller & Decision helpers ────────────────────────────────────────────
+
+/// Returns true if the delegation target refers to the Fellowship JEV decision controller.
+pub fn is_controller_target(name: &str) -> bool {
+    matches!(name.trim().to_lowercase().as_str(), "controller" | "jev" | "gguf")
+}
+
+/// Parse optional inline choices from a `TASK:` payload.
+/// Format:
+/// ```text
+/// Question or context here
+/// CHOICES:
+/// - yes: Criteria for yes
+/// - no: Criteria for no
+/// ```
+fn parse_inline_choices(task: &str) -> Option<(String, std::collections::HashMap<String, String>)> {
+    let lines: Vec<&str> = task.lines().collect();
+    let header_idx = lines.iter().position(|l| {
+        let t = l.trim().to_uppercase();
+        t == "CHOICES:" || t == "OPTIONS:"
+    })?;
+
+    let question = lines[..header_idx].join("\n").trim().to_string();
+    let mut choices = std::collections::HashMap::new();
+    for line in &lines[header_idx + 1..] {
+        let trimmed = line.trim().trim_start_matches('-').trim_start_matches('*').trim();
+        if let Some((k, v)) = trimmed.split_once(':') {
+            let key = k.trim().to_string();
+            let val = v.trim().to_string();
+            if !key.is_empty() && !val.is_empty() {
+                choices.insert(key, val);
+            }
+        }
+    }
+
+    if choices.is_empty() {
+        None
+    } else {
+        Some((if question.is_empty() { task.to_string() } else { question }, choices))
+    }
+}
+
 // ── System prompt builder ────────────────────────────────────────────────────
 
 fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAgent]) -> String {
     let can_call_desc: Vec<String> = agent.can_call.iter()
         .filter_map(|name| {
-            if name == "gguf" {
-                Some("  - gguf — free local model for trivial tasks (formatting, simple edits, quick answers)".to_string())
+            if is_controller_target(name) {
+                Some(format!("  - {} — fast zero-shot JEV decision oracle (pass question/evidence in TASK: to get an immediate verdict)", name))
             } else {
                 all_agents.iter()
                     .find(|a| &a.name == name)
-                    .map(|a| format!("  - {} — {}", a.name, a.role))
+                    .map(|a| {
+                        if a.agent_type == AgentType::Decision {
+                            let mode_label = match a.effective_decision_mode() {
+                                DecisionMode::Route => "decision: route",
+                                DecisionMode::Gate => "decision: gate",
+                                DecisionMode::Consult => "decision: consult",
+                            };
+                            format!("  - {} [{}] — {}", a.name, mode_label, a.role)
+                        } else {
+                            format!("  - {} — {}", a.name, a.role)
+                        }
+                    })
             }
         })
         .collect();
@@ -583,8 +935,7 @@ fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAg
     let can_call_section = if can_call_desc.is_empty() {
         "You cannot call other agents. Complete the task yourself.".to_string()
     } else {
-        format!("You can delegate to:\n{}", can_call_desc.join("
-"))
+        format!("You can delegate to:\n{}", can_call_desc.join("\n"))
     };
 
     format!(
@@ -603,7 +954,7 @@ fn build_agent_system_prompt(agent: &FellowshipAgent, all_agents: &[FellowshipAg
          ## Rules\n\
          - Always include relevant tool output in your response. Show the actual data, not just a summary.\n\
          - When a tool returns results the user asked for, include them verbatim in your RESPONSE.\n\
-         - Use NEXT: gguf for trivial sub-tasks (saves money)\n\
+         - Use NEXT: controller (or NEXT: jev) for fast zero-shot decisions or triage\n\
          - Only call agents you actually need\n\
          - Be concise in TASK: descriptions\n\
          - If you can complete the task yourself, do it and say NEXT: DONE\n\
@@ -702,6 +1053,7 @@ mod tests {
                 can_call: vec!["reviewer".to_string(), "gguf".to_string()],
                 provider: Some("groq".to_string()),
                 model: None, agent_type: AgentType::Provider,
+                mode: None, choices: None,
                 binary: None, args: None, when: None, tools: None,
             },
             FellowshipAgent {
@@ -710,6 +1062,7 @@ mod tests {
                 can_call: vec![],
                 provider: Some("gemini".to_string()),
                 model: None, agent_type: AgentType::Provider,
+                mode: None, choices: None,
                 binary: None, args: None, when: None, tools: None,
             },
         ];
@@ -730,6 +1083,7 @@ mod tests {
                 can_call: vec![],
                 provider: Some("gemini".to_string()),
                 model: None, agent_type: AgentType::Provider,
+                mode: None, choices: None,
                 binary: None, args: None, when: None, tools: None,
             },
         ];
@@ -781,6 +1135,7 @@ mod tests {
             TraceEntry::ToolCall { name: "read_psi".to_string(), success: true, preview: "...".to_string() },
             TraceEntry::Delegation { from: "worker".to_string(), to: "reviewer".to_string(), task_preview: "review".to_string() },
             TraceEntry::GgufCall { task_preview: "format".to_string() },
+            TraceEntry::DecisionStep { agent: "router".to_string(), mode: "route".to_string(), outcome: "pass -> reviewer".to_string() },
             TraceEntry::Done { agent: "worker".to_string() },
             TraceEntry::BudgetWarning { used: 1000, limit: 5000 },
         ];
@@ -901,6 +1256,207 @@ mod tests {
             }
             _ => panic!("Expected CallAgent"),
         }
+    }
+
+    #[test]
+    fn test_entry_candidate_filtering_and_mentions() {
+        let yaml = r#"
+name: "test-fellowship"
+controller:
+  provider: local
+  model: jevos-v4
+agents:
+  - name: "coder"
+    provider: gemini
+    role: "Writes code"
+    when: "coding tasks"
+  - name: "quality_gate"
+    type: decision
+    mode: gate
+    provider: local
+    model: jevos-v4
+    role: "Verify tests"
+    can_call: ["coder"]
+  - name: "oracle"
+    type: decision
+    mode: consult
+    provider: local
+    model: jevos-v4
+    role: "Answers questions"
+"#;
+        let config: FellowshipConfig = serde_yaml::from_str(yaml).unwrap();
+        let orch = Orchestrator::new(config, MithrilConfig::default(), TraceMode::Silent);
+
+        let candidates = orch.build_entry_candidates();
+        assert!(candidates.contains_key("coder"));
+        assert!(!candidates.contains_key("quality_gate"));
+        assert!(!candidates.contains_key("oracle"));
+
+        // #agent mentions should allow entry-eligible agents and ignore internal-only decision agents
+        assert_eq!(orch.extract_agent_mention("#coder fix bug"), Some("coder".to_string()));
+        assert_eq!(orch.extract_agent_mention("#quality_gate check"), None);
+        assert_eq!(orch.extract_agent_mention("#oracle question"), None);
+    }
+
+    #[test]
+    fn test_controller_targets_and_inline_choices() {
+        assert!(is_controller_target("controller"));
+        assert!(is_controller_target("jev"));
+        assert!(is_controller_target("gguf"));
+        assert!(!is_controller_target("coder"));
+
+        let task = "Should we refactor this module?\nCHOICES:\n- yes: High complexity and duplicated logic\n- no: Already clean and tested";
+        let (question, choices) = parse_inline_choices(task).unwrap();
+        assert_eq!(question, "Should we refactor this module?");
+        assert_eq!(choices.get("yes").map(String::as_str), Some("High complexity and duplicated logic"));
+        assert_eq!(choices.get("no").map(String::as_str), Some("Already clean and tested"));
+    }
+
+    #[test]
+    fn test_decision_agent_route_mode_and_fallback() {
+        let yaml = r#"
+name: "route-test"
+controller:
+  provider: local
+  model: jevos-v4
+agents:
+  - name: "coder"
+    provider: gemini
+    role: "Writes code"
+    can_call: ["triage_router"]
+  - name: "triage_router"
+    type: decision
+    mode: route
+    provider: local
+    model: jevos-v4
+    role: "Route based on whether security or performance review is needed"
+    can_call: ["sec_reviewer", "perf_reviewer"]
+  - name: "sec_reviewer"
+    provider: gemini
+    role: "Security audit"
+    when: "auth, crypto, or SQL changes"
+  - name: "perf_reviewer"
+    provider: gemini
+    role: "Performance optimization"
+    when: "hot loops, allocations, or latency"
+"#;
+        let config: FellowshipConfig = serde_yaml::from_str(yaml).unwrap();
+        let orch = Orchestrator::new(config.clone(), MithrilConfig::default(), TraceMode::Silent);
+        let router = config.get_agent("triage_router").unwrap();
+
+        let candidates = orch.build_route_candidates(router);
+        assert_eq!(candidates.get("sec_reviewer").map(String::as_str), Some("auth, crypto, or SQL changes"));
+        assert_eq!(candidates.get("perf_reviewer").map(String::as_str), Some("hot loops, allocations, or latency"));
+
+        // Selecting perf_reviewer
+        let t1 = orch.resolve_decision_transition(router, "Check loop allocations", "perf_reviewer", Some("coder"));
+        assert_eq!(t1.next_agent, "perf_reviewer");
+        assert_eq!(t1.next_task, "Check loop allocations");
+        assert_eq!(t1.mode, "route");
+
+        // Unexpected model output falls back deterministically to can_call[0] ("sec_reviewer")
+        let t2 = orch.resolve_decision_transition(router, "Check unknown", "unexpected_choice", None);
+        assert_eq!(t2.next_agent, "sec_reviewer");
+        assert_eq!(t2.mode, "route");
+    }
+
+    #[test]
+    fn test_decision_agent_gate_mode_pass_and_retry() {
+        let yaml = r#"
+name: "gate-test"
+controller:
+  provider: local
+  model: jevos-v4
+agents:
+  - name: "coder"
+    provider: gemini
+    role: "Writes code"
+    can_call: ["quality_gate"]
+  - name: "quality_gate"
+    type: decision
+    mode: gate
+    provider: local
+    model: jevos-v4
+    role: "Verify tests are included and passing"
+    choices:
+      pass: "Includes unit tests"
+      retry: "Missing unit tests"
+    can_call: ["reviewer"]
+  - name: "reviewer"
+    provider: gemini
+    role: "Final review"
+"#;
+        let config: FellowshipConfig = serde_yaml::from_str(yaml).unwrap();
+        let orch = Orchestrator::new(config.clone(), MithrilConfig::default(), TraceMode::Silent);
+        let gate = config.get_agent("quality_gate").unwrap();
+
+        // Pass transitions forward to can_call[0] ("reviewer")
+        let pass_transition = orch.resolve_decision_transition(
+            gate,
+            "Implemented feature with 4 unit tests",
+            "pass",
+            Some("coder"),
+        );
+        assert_eq!(pass_transition.next_agent, "reviewer");
+        assert_eq!(pass_transition.next_task, "Implemented feature with 4 unit tests");
+        assert_eq!(pass_transition.mode, "gate");
+        assert_eq!(pass_transition.verdict, "pass");
+
+        // Retry bounces back to caller ("coder") with rejection message
+        let retry_transition = orch.resolve_decision_transition(
+            gate,
+            "Implemented feature without tests",
+            "retry",
+            Some("coder"),
+        );
+        assert_eq!(retry_transition.next_agent, "coder");
+        assert!(retry_transition.next_task.contains("Gate 'quality_gate' rejected output"));
+        assert!(retry_transition.next_task.contains("Verify tests are included and passing"));
+        assert_eq!(retry_transition.mode, "gate");
+        assert_eq!(retry_transition.verdict, "retry");
+    }
+
+    #[test]
+    fn test_decision_agent_consult_mode_returns_to_caller() {
+        let yaml = r#"
+name: "consult-test"
+controller:
+  provider: local
+  model: jevos-v4
+agents:
+  - name: "architect"
+    provider: gemini
+    role: "Designs architecture"
+    can_call: ["risk_oracle"]
+  - name: "risk_oracle"
+    type: decision
+    mode: consult
+    provider: local
+    model: jevos-v4
+    role: "Classify migration risk level"
+    choices:
+      high: "Breaking schema change"
+      low: "Additive nullable column"
+"#;
+        let config: FellowshipConfig = serde_yaml::from_str(yaml).unwrap();
+        let orch = Orchestrator::new(config.clone(), MithrilConfig::default(), TraceMode::Silent);
+        let oracle = config.get_agent("risk_oracle").unwrap();
+
+        let consult_transition = orch.resolve_decision_transition(
+            oracle,
+            "Adding nullable column last_login_at",
+            "low",
+            Some("architect"),
+        );
+        assert_eq!(consult_transition.next_agent, "architect");
+        assert!(consult_transition.next_task.contains("Result from risk_oracle: low"));
+        assert_eq!(consult_transition.mode, "consult");
+        assert_eq!(consult_transition.verdict, "low");
+
+        // Prompt for architect should annotate risk_oracle with [decision: consult]
+        let architect = config.get_agent("architect").unwrap();
+        let prompt = build_agent_system_prompt(architect, &config.agents);
+        assert!(prompt.contains("risk_oracle [decision: consult]"));
     }
 
 }

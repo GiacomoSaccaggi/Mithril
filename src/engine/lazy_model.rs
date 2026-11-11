@@ -104,6 +104,14 @@ impl LazyModelManager {
         self.state.lock().model.is_some()
     }
 
+    pub fn model_path(&self) -> &std::path::Path {
+        &self.model_path
+    }
+
+    pub fn n_ctx(&self) -> u32 {
+        self.n_ctx
+    }
+
     /// Run blocking inference on a thread pool. Port of LazyModelManager.infer().
     pub fn infer(
         &self,
@@ -265,7 +273,8 @@ impl LazyModelManager {
                     .ok_or_else(|| anyhow!("Backend not initialized"))?;
 
                 let ctx_params = LlamaContextParams::default()
-                    .with_n_ctx(NonZeroU32::new(n_ctx));
+                    .with_n_ctx(NonZeroU32::new(n_ctx))
+                    .with_n_batch(n_ctx);
                 let mut ctx = model.new_context(backend, ctx_params)?;
 
                 let tokens = model.str_to_token(&prompt, AddBos::Always)?;

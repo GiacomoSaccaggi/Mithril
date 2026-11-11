@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use colored::Colorize;
-use crate::flow::fellowship::{self, AgentType};
+use crate::flow::fellowship::{self, AgentType, DecisionMode};
 
 pub async fn run() -> Result<()> {
     let fellowships = fellowship::list_fellowships();
@@ -37,6 +37,14 @@ pub async fn run() -> Result<()> {
             let provider = match a.agent_type {
                 AgentType::Provider => a.provider.as_deref().unwrap_or("?").to_string(),
                 AgentType::External => a.binary.as_deref().unwrap_or("?").to_string(),
+                AgentType::Decision => {
+                    let mode = match a.effective_decision_mode() {
+                        DecisionMode::Route => "route",
+                        DecisionMode::Gate => "gate",
+                        DecisionMode::Consult => "consult",
+                    };
+                    format!("decision:{}", mode)
+                }
             };
             format!("{} ({})", a.name, provider)
         }).collect();

@@ -27,6 +27,7 @@ pub mod copilot;
 pub mod junie;
 pub mod glean;
 pub mod redacting;
+pub mod resolver;
 pub mod jev;
 mod gemini;
 mod openai;

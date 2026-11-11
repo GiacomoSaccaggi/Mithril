@@ -167,7 +167,7 @@ pub struct GeminiSettings {
 impl Default for GeminiSettings {
     fn default() -> Self { Self { model: default_gemini_model() } }
 }
-fn default_gemini_model() -> String { "gemini-3.6-flash".to_string() }
+fn default_gemini_model() -> String { "gemini-2.5-flash".to_string() }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAISettings {
@@ -547,6 +547,7 @@ mod tests {
         let config = MithrilConfig::default();
         assert_eq!(config.default_provider, "local");
         assert_eq!(config.default_model, "qwen-1.5b");
+        assert_eq!(config.providers.gemini.model, "gemini-2.5-flash");
         assert!(config.terminal_sandbox);
     }
 

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "mithril-cli"
-version = "1.0.0"
+version = "1.1.0"
 description = "Multi-model orchestration backend. Fellowship-based agent routing with Ollama/OpenAI/MCP API compatibility."
 readme = "README.md"
 license = { text = "MIT" }
